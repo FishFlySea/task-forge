@@ -9,27 +9,42 @@ Architecture:
 
 ## Current status
 
-Phase 1 and Phase 2 foundations are implemented:
+The first end-to-end MVP workflow is implemented:
 
-- .NET 10 solution;
-- explicit workflow state machine;
-- local JSON run store and artifacts;
-- local Ollama structured-output client;
-- Planner agent;
-- deterministic repository search;
-- Explorer agent;
-- TaskPacket generation;
-- CLI commands `run`, `runs`, and `show`;
-- tests and GitHub Actions CI.
+```text
+Task
+ ↓
+Planner (Ollama)
+ ↓
+Explorer (deterministic search + Ollama)
+ ↓
+TaskPacket
+ ↓
+Codex implementation [1/2]
+ ↓
+dotnet build/test
+ ↓
+Diagnostic (Ollama, only on failure)
+ ↓
+optional Codex correction [2/2]
+ ↓
+dotnet build/test
+ ↓
+Review (Ollama)
+ ↓
+Completed / NeedsUser / Failed / BudgetExceeded
+```
 
-The current workflow intentionally stops at `NeedsUser` after producing
-`task-packet.json`. Codex implementation is Phase 3.
+TaskForge launches Codex with the `multi_agent` feature explicitly disabled.
+The budget permits exactly one implementation run and at most one correction run.
 
 ## Requirements
 
 - .NET 10 SDK
-- Ollama reachable from the machine running TaskForge
-- a configured local coding model
+- Git
+- Ollama reachable from the TaskForge host
+- a local coding model in Ollama
+- Codex CLI installed and authenticated
 
 Defaults:
 
@@ -37,6 +52,9 @@ Defaults:
 TASKFORGE_OLLAMA_URL=http://localhost:11434/
 TASKFORGE_OLLAMA_MODEL=qwen3-coder
 TASKFORGE_OLLAMA_TIMEOUT_SECONDS=120
+TASKFORGE_CODEX_EXECUTABLE=codex
+TASKFORGE_CODEX_TIMEOUT_SECONDS=1200
+TASKFORGE_DOTNET_EXECUTABLE=dotnet
 ```
 
 ## Usage
@@ -49,3 +67,6 @@ dotnet run --project src/TaskForge.Cli -- show <run-id>
 ```
 
 Set `TASKFORGE_RUNS_DIRECTORY` to override the local run storage directory.
+
+Each run stores its plan, exploration result, task packet, Codex JSONL trace,
+build/test logs, diagnosis (if needed), git snapshot, review, and final state.

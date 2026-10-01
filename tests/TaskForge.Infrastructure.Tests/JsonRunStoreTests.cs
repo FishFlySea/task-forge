@@ -12,13 +12,15 @@ public sealed class JsonRunStoreTests : IDisposable
             Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public async Task Create_get_list_and_artifact_roundtrip()
+    public async Task Create_get_list_and_artifacts_roundtrip()
     {
         var store =
-            new JsonRunStore(_directory);
+            new JsonRunStore(
+                _directory);
 
         var id =
-            new TaskId("tf-test");
+            new TaskId(
+                "tf-test");
 
         var request =
             new TaskRequest(
@@ -55,6 +57,12 @@ public sealed class JsonRunStoreTests : IDisposable
             },
             CancellationToken.None);
 
+        await store.SaveTextArtifactAsync(
+            id,
+            "trace.log",
+            "hello",
+            CancellationToken.None);
+
         var loaded =
             await store.GetAsync(
                 id,
@@ -65,34 +73,40 @@ public sealed class JsonRunStoreTests : IDisposable
                 10,
                 CancellationToken.None);
 
-        Assert.NotNull(loaded);
+        Assert.NotNull(
+            loaded);
+
         Assert.Equal(
             id,
             loaded.Id);
+
         Assert.Equal(
             WorkflowState.Created,
             loaded.State);
 
         var item =
-            Assert.Single(listed);
+            Assert.Single(
+                listed);
 
         Assert.Equal(
             id,
             item.Id);
 
-        Assert.True(
-            File.Exists(
+        Assert.Equal(
+            "hello",
+            await File.ReadAllTextAsync(
                 Path.Combine(
                     _directory,
                     id.Value,
-                    "plan.json")));
+                    "trace.log")));
     }
 
     [Fact]
     public async Task Artifact_file_name_cannot_escape_run_directory()
     {
         var store =
-            new JsonRunStore(_directory);
+            new JsonRunStore(
+                _directory);
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => store.SaveArtifactAsync(
@@ -100,11 +114,19 @@ public sealed class JsonRunStoreTests : IDisposable
                 "../escape.json",
                 new { Value = 1 },
                 CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.SaveTextArtifactAsync(
+                new TaskId("tf-test"),
+                "../escape.log",
+                "test",
+                CancellationToken.None));
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(_directory))
+        if (Directory.Exists(
+                _directory))
         {
             Directory.Delete(
                 _directory,

@@ -19,6 +19,12 @@ public interface IRunStore
         T value,
         CancellationToken cancellationToken);
 
+    Task SaveTextArtifactAsync(
+        TaskId id,
+        string fileName,
+        string content,
+        CancellationToken cancellationToken);
+
     Task<RunMetadata?> GetAsync(
         TaskId id,
         CancellationToken cancellationToken);

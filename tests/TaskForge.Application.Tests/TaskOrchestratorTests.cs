@@ -6,46 +6,54 @@ namespace TaskForge.Application.Tests;
 public sealed class TaskOrchestratorTests
 {
     [Fact]
-    public async Task Phase_two_run_builds_and_persists_task_packet()
+    public async Task Happy_path_uses_one_codex_run_and_completes()
     {
-        var store = new FakeRunStore();
+        var store =
+            new FakeRunStore();
 
-        var orchestrator = new TaskOrchestrator(
-            store,
-            new FakePlannerAgent(),
-            new FakeExplorerAgent(),
-            TimeProvider.System);
+        using var gate =
+            new CodexRunGate(
+                new AgentBudgetOptions());
 
-        var result = await orchestrator.RunAsync(
-            new TaskRequest(
-                "Implement planner",
-                "/tmp/repository"),
-            CancellationToken.None);
+        var orchestrator =
+            new TaskOrchestrator(
+                store,
+                new FakePlannerAgent(),
+                new FakeExplorerAgent(),
+                new FakeImplementerAgent(),
+                gate,
+                new FakeDotnetRunner(),
+                new FakeGitClient(),
+                new FakeDiagnosticAgent(),
+                new FakeReviewAgent(),
+                TimeProvider.System);
+
+        var result =
+            await orchestrator.RunAsync(
+                new TaskRequest(
+                    "Implement planner",
+                    "/tmp/repository"),
+                CancellationToken.None);
 
         Assert.Equal(
-            WorkflowState.NeedsUser,
+            WorkflowState.Completed,
             result.State);
 
         Assert.Equal(
-            [
-                WorkflowState.Created,
-                WorkflowState.Planning,
-                WorkflowState.Exploring,
-                WorkflowState.PacketReady,
-                WorkflowState.NeedsUser
-            ],
-            store.SavedStates);
+            1,
+            store.LastMetadata?.CodexRuns);
 
-        Assert.Equal(
-            [
-                "plan.json",
-                "exploration.json",
-                "task-packet.json"
-            ],
-            store.Artifacts);
+        Assert.Contains(
+            "codex-01.jsonl",
+            store.TextArtifacts);
+
+        Assert.Contains(
+            "review.json",
+            store.JsonArtifacts);
     }
 
-    private sealed class FakePlannerAgent : IPlannerAgent
+    private sealed class FakePlannerAgent :
+        IPlannerAgent
     {
         public Task<PlanResult> PlanAsync(
             TaskRequest request,
@@ -63,7 +71,8 @@ public sealed class TaskOrchestratorTests
                 });
     }
 
-    private sealed class FakeExplorerAgent : IExplorerAgent
+    private sealed class FakeExplorerAgent :
+        IExplorerAgent
     {
         public Task<ExplorationResult> ExploreAsync(
             TaskRequest request,
@@ -85,18 +94,99 @@ public sealed class TaskOrchestratorTests
                 });
     }
 
-    private sealed class FakeRunStore : IRunStore
+    private sealed class FakeImplementerAgent :
+        IImplementerAgent
     {
-        public List<WorkflowState> SavedStates { get; } = [];
+        public Task<CodexRunResult> ExecuteAsync(
+            TaskPacket taskPacket,
+            string workspace,
+            CodexRunKind kind,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new CodexRunResult(
+                    0,
+                    "{\"type\":\"done\"}",
+                    string.Empty));
+    }
 
-        public List<string> Artifacts { get; } = [];
+    private sealed class FakeDotnetRunner :
+        IDotnetRunner
+    {
+        public Task<ProcessResult> BuildAsync(
+            string workspace,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new ProcessResult(
+                    0,
+                    "build ok",
+                    string.Empty));
+
+        public Task<ProcessResult> TestAsync(
+            string workspace,
+            IReadOnlyList<TestTarget> targets,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new ProcessResult(
+                    0,
+                    "tests ok",
+                    string.Empty));
+    }
+
+    private sealed class FakeGitClient :
+        IGitClient
+    {
+        public Task<string> GetWorkingTreeSnapshotAsync(
+            string workspace,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                "M src/Test.cs");
+    }
+
+    private sealed class FakeDiagnosticAgent :
+        IDiagnosticAgent
+    {
+        public Task<DiagnosticResult> DiagnoseAsync(
+            TaskPacket taskPacket,
+            ProcessResult failure,
+            string gitSnapshot,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(
+                "Diagnostic should not run on happy path.");
+    }
+
+    private sealed class FakeReviewAgent :
+        IReviewAgent
+    {
+        public Task<ReviewResult> ReviewAsync(
+            TaskPacket taskPacket,
+            string gitSnapshot,
+            ProcessResult buildResult,
+            ProcessResult testResult,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new ReviewResult
+                {
+                    Acceptable = true,
+                    Findings = [],
+                    Warnings = []
+                });
+    }
+
+    private sealed class FakeRunStore :
+        IRunStore
+    {
+        public RunMetadata? LastMetadata { get; private set; }
+
+        public List<string> JsonArtifacts { get; } = [];
+
+        public List<string> TextArtifacts { get; } = [];
 
         public Task CreateAsync(
             TaskRequest request,
             RunMetadata metadata,
             CancellationToken cancellationToken)
         {
-            SavedStates.Add(metadata.State);
+            LastMetadata = metadata;
             return Task.CompletedTask;
         }
 
@@ -104,7 +194,7 @@ public sealed class TaskOrchestratorTests
             RunMetadata metadata,
             CancellationToken cancellationToken)
         {
-            SavedStates.Add(metadata.State);
+            LastMetadata = metadata;
             return Task.CompletedTask;
         }
 
@@ -114,18 +204,36 @@ public sealed class TaskOrchestratorTests
             T value,
             CancellationToken cancellationToken)
         {
-            Artifacts.Add(fileName);
+            JsonArtifacts.Add(
+                fileName);
+
+            return Task.CompletedTask;
+        }
+
+        public Task SaveTextArtifactAsync(
+            TaskId id,
+            string fileName,
+            string content,
+            CancellationToken cancellationToken)
+        {
+            TextArtifacts.Add(
+                fileName);
+
             return Task.CompletedTask;
         }
 
         public Task<RunMetadata?> GetAsync(
             TaskId id,
             CancellationToken cancellationToken) =>
-            Task.FromResult<RunMetadata?>(null);
+            Task.FromResult(
+                LastMetadata);
 
         public Task<IReadOnlyList<RunMetadata>> ListAsync(
             int limit,
             CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<RunMetadata>>([]);
+            Task.FromResult<IReadOnlyList<RunMetadata>>(
+                LastMetadata is null
+                    ? []
+                    : [LastMetadata]);
     }
 }

@@ -6,15 +6,18 @@ namespace TaskForge.Cli;
 
 internal static class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static async Task<int> Main(
+        string[] args)
     {
-        using var cancellation = new CancellationTokenSource();
+        using var cancellation =
+            new CancellationTokenSource();
 
-        Console.CancelKeyPress += (_, eventArgs) =>
-        {
-            eventArgs.Cancel = true;
-            cancellation.Cancel();
-        };
+        Console.CancelKeyPress +=
+            (_, eventArgs) =>
+            {
+                eventArgs.Cancel = true;
+                cancellation.Cancel();
+            };
 
         try
         {
@@ -24,9 +27,11 @@ internal static class Program
                 return 5;
             }
 
-            var store = CreateRunStore();
+            var store =
+                CreateRunStore();
 
-            return args[0].ToLowerInvariant() switch
+            return args[0]
+                .ToLowerInvariant() switch
             {
                 "run" => await RunAsync(
                     store,
@@ -44,17 +49,23 @@ internal static class Program
         }
         catch (OperationCanceledException)
         {
-            Console.Error.WriteLine("Cancelled.");
+            Console.Error.WriteLine(
+                "Cancelled.");
+
             return 4;
         }
         catch (ArgumentException exception)
         {
-            Console.Error.WriteLine(exception.Message);
+            Console.Error.WriteLine(
+                exception.Message);
+
             return 5;
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine(exception);
+            Console.Error.WriteLine(
+                exception);
+
             return 1;
         }
     }
@@ -64,9 +75,11 @@ internal static class Program
         var runsDirectory =
             Environment.GetEnvironmentVariable(
                 "TASKFORGE_RUNS_DIRECTORY")
-            ?? JsonRunStore.GetDefaultRunsDirectory();
+            ?? JsonRunStore
+                .GetDefaultRunsDirectory();
 
-        return new JsonRunStore(runsDirectory);
+        return new JsonRunStore(
+            runsDirectory);
     }
 
     private static async Task<int> RunAsync(
@@ -77,14 +90,16 @@ internal static class Program
         var (goal, repositoryPath) =
             ParseRunArguments(args);
 
-        if (!Directory.Exists(repositoryPath))
+        if (!Directory.Exists(
+                repositoryPath))
         {
             throw new ArgumentException(
                 $"Repository path does not exist: {repositoryPath}");
         }
 
-        repositoryPath = Path.GetFullPath(
-            repositoryPath);
+        repositoryPath =
+            Path.GetFullPath(
+                repositoryPath);
 
         var ollamaUrl =
             Environment.GetEnvironmentVariable(
@@ -96,53 +111,115 @@ internal static class Program
                 "TASKFORGE_OLLAMA_MODEL")
             ?? "qwen3-coder";
 
-        var timeoutSeconds = GetPositiveIntEnvironmentVariable(
-            "TASKFORGE_OLLAMA_TIMEOUT_SECONDS",
-            120);
+        var ollamaTimeout =
+            GetPositiveIntEnvironmentVariable(
+                "TASKFORGE_OLLAMA_TIMEOUT_SECONDS",
+                120);
 
-        using var httpClient = new HttpClient
-        {
-            BaseAddress = NormalizeBaseAddress(ollamaUrl),
-            Timeout = TimeSpan.FromSeconds(timeoutSeconds)
-        };
+        using var httpClient =
+            new HttpClient
+            {
+                BaseAddress =
+                    NormalizeBaseAddress(
+                        ollamaUrl),
+                Timeout =
+                    TimeSpan.FromSeconds(
+                        ollamaTimeout)
+            };
 
-        var localLlm = new OllamaClient(
-            httpClient,
-            ollamaModel);
+        var localLlm =
+            new OllamaClient(
+                httpClient,
+                ollamaModel);
 
-        var planner = new PlannerAgent(
-            localLlm);
+        var planner =
+            new PlannerAgent(
+                localLlm);
 
-        var explorer = new ExplorerAgent(
-            localLlm,
-            new FileSystemRepositorySearch());
+        var explorer =
+            new ExplorerAgent(
+                localLlm,
+                new FileSystemRepositorySearch());
 
-        var orchestrator = new TaskOrchestrator(
-            runStore,
-            planner,
-            explorer,
-            TimeProvider.System);
+        var codexOptions =
+            new CodexCliOptions
+            {
+                Executable =
+                    Environment.GetEnvironmentVariable(
+                        "TASKFORGE_CODEX_EXECUTABLE")
+                    ?? "codex",
+                Timeout =
+                    TimeSpan.FromSeconds(
+                        GetPositiveIntEnvironmentVariable(
+                            "TASKFORGE_CODEX_TIMEOUT_SECONDS",
+                            1200))
+            };
 
-        var result = await orchestrator.RunAsync(
-            new TaskRequest(
-                goal,
-                repositoryPath),
-            cancellationToken);
+        var implementer =
+            new ImplementerAgent(
+                new CodexCliClient(
+                    codexOptions));
 
-        Console.WriteLine($"Run:   {result.Id}");
-        Console.WriteLine($"State: {result.State}");
-        Console.WriteLine(result.Message);
+        using var codexGate =
+            new CodexRunGate(
+                new AgentBudgetOptions
+                {
+                    MaxCodexRunsPerTask = 2,
+                    MaxCodexRetries = 1,
+                    MaxConcurrentCodexRuns = 1
+                });
 
-        return MapExitCode(result.State);
+        var dotnetRunner =
+            new DotnetRunner(
+                new DotnetRunnerOptions
+                {
+                    Executable =
+                        Environment.GetEnvironmentVariable(
+                            "TASKFORGE_DOTNET_EXECUTABLE")
+                        ?? "dotnet"
+                });
+
+        var orchestrator =
+            new TaskOrchestrator(
+                runStore,
+                planner,
+                explorer,
+                implementer,
+                codexGate,
+                dotnetRunner,
+                new GitClient(),
+                new DiagnosticAgent(
+                    localLlm),
+                new ReviewAgent(
+                    localLlm),
+                TimeProvider.System);
+
+        var result =
+            await orchestrator.RunAsync(
+                new TaskRequest(
+                    goal,
+                    repositoryPath),
+                cancellationToken);
+
+        Console.WriteLine(
+            $"Run:   {result.Id}");
+        Console.WriteLine(
+            $"State: {result.State}");
+        Console.WriteLine(
+            result.Message);
+
+        return MapExitCode(
+            result.State);
     }
 
     private static async Task<int> ListRunsAsync(
         IRunStore runStore,
         CancellationToken cancellationToken)
     {
-        var runs = await runStore.ListAsync(
-            20,
-            cancellationToken);
+        var runs =
+            await runStore.ListAsync(
+                20,
+                cancellationToken);
 
         if (runs.Count == 0)
         {
@@ -171,15 +248,17 @@ internal static class Program
         CancellationToken cancellationToken)
     {
         if (args.Length != 1
-            || string.IsNullOrWhiteSpace(args[0]))
+            || string.IsNullOrWhiteSpace(
+                args[0]))
         {
             throw new ArgumentException(
                 "Usage: taskforge show <run-id>");
         }
 
-        var metadata = await runStore.GetAsync(
-            new TaskId(args[0]),
-            cancellationToken);
+        var metadata =
+            await runStore.GetAsync(
+                new TaskId(args[0]),
+                cancellationToken);
 
         if (metadata is null)
         {
@@ -189,12 +268,18 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine($"ID:         {metadata.Id}");
-        Console.WriteLine($"State:      {metadata.State}");
-        Console.WriteLine($"Repository: {metadata.RepositoryPath}");
-        Console.WriteLine($"Started:    {metadata.StartedAt:O}");
-        Console.WriteLine($"Finished:   {metadata.FinishedAt:O}");
-        Console.WriteLine($"Codex runs: {metadata.CodexRuns}");
+        Console.WriteLine(
+            $"ID:         {metadata.Id}");
+        Console.WriteLine(
+            $"State:      {metadata.State}");
+        Console.WriteLine(
+            $"Repository: {metadata.RepositoryPath}");
+        Console.WriteLine(
+            $"Started:    {metadata.StartedAt:O}");
+        Console.WriteLine(
+            $"Finished:   {metadata.FinishedAt:O}");
+        Console.WriteLine(
+            $"Codex runs: {metadata.CodexRuns}");
 
         if (!string.IsNullOrWhiteSpace(
                 metadata.Message))
@@ -214,9 +299,12 @@ internal static class Program
         var repositoryPath =
             Directory.GetCurrentDirectory();
 
-        var goalParts = new List<string>();
+        var goalParts =
+            new List<string>();
 
-        for (var i = 0; i < args.Length; i++)
+        for (var i = 0;
+             i < args.Length;
+             i++)
         {
             if (string.Equals(
                     args[i],
@@ -229,24 +317,32 @@ internal static class Program
                         "--repo requires a path.");
                 }
 
-                repositoryPath = args[++i];
+                repositoryPath =
+                    args[++i];
+
                 continue;
             }
 
-            goalParts.Add(args[i]);
+            goalParts.Add(
+                args[i]);
         }
 
-        var goal = string
-            .Join(' ', goalParts)
-            .Trim();
+        var goal =
+            string.Join(
+                    ' ',
+                    goalParts)
+                .Trim();
 
-        if (string.IsNullOrWhiteSpace(goal))
+        if (string.IsNullOrWhiteSpace(
+                goal))
         {
             throw new ArgumentException(
                 "Usage: taskforge run [--repo <path>] <task>");
         }
 
-        return (goal, repositoryPath);
+        return (
+            goal,
+            repositoryPath);
     }
 
     private static Uri NormalizeBaseAddress(
@@ -269,7 +365,8 @@ internal static class Program
         int defaultValue)
     {
         var value =
-            Environment.GetEnvironmentVariable(name);
+            Environment.GetEnvironmentVariable(
+                name);
 
         return int.TryParse(
                    value,
@@ -302,9 +399,11 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.WriteLine("TaskForge");
+        Console.WriteLine(
+            "TaskForge");
         Console.WriteLine();
-        Console.WriteLine("Usage:");
+        Console.WriteLine(
+            "Usage:");
         Console.WriteLine(
             "  taskforge run [--repo <path>] <task>");
         Console.WriteLine(

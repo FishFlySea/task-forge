@@ -16,24 +16,34 @@ public sealed class JsonRunStore : IRunStore
 
     public JsonRunStore(string runsDirectory)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(runsDirectory);
-        _runsDirectory = Path.GetFullPath(runsDirectory);
-        Directory.CreateDirectory(_runsDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            runsDirectory);
+
+        _runsDirectory =
+            Path.GetFullPath(runsDirectory);
+
+        Directory.CreateDirectory(
+            _runsDirectory);
     }
 
     public static string GetDefaultRunsDirectory()
     {
-        var localData = Environment.GetFolderPath(
-            Environment.SpecialFolder.LocalApplicationData);
+        var localData =
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
 
         if (string.IsNullOrWhiteSpace(localData))
         {
             localData = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.UserProfile),
                 ".taskforge");
         }
 
-        return Path.Combine(localData, "TaskForge", "runs");
+        return Path.Combine(
+            localData,
+            "TaskForge",
+            "runs");
     }
 
     public async Task CreateAsync(
@@ -41,11 +51,16 @@ public sealed class JsonRunStore : IRunStore
         RunMetadata metadata,
         CancellationToken cancellationToken)
     {
-        var runDirectory = GetRunDirectory(metadata.Id);
-        Directory.CreateDirectory(runDirectory);
+        var runDirectory =
+            GetRunDirectory(metadata.Id);
+
+        Directory.CreateDirectory(
+            runDirectory);
 
         await WriteJsonAsync(
-            Path.Combine(runDirectory, "request.json"),
+            Path.Combine(
+                runDirectory,
+                "request.json"),
             request,
             cancellationToken);
 
@@ -70,23 +85,38 @@ public sealed class JsonRunStore : IRunStore
         T value,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
-
-        if (!string.Equals(
-                fileName,
-                Path.GetFileName(fileName),
-                StringComparison.Ordinal))
-        {
-            throw new ArgumentException(
-                "Artifact file name must not contain a directory path.",
-                nameof(fileName));
-        }
+        ValidateArtifactFileName(
+            fileName);
 
         return WriteJsonAsync(
             Path.Combine(
                 GetRunDirectory(id),
                 fileName),
             value,
+            cancellationToken);
+    }
+
+    public async Task SaveTextArtifactAsync(
+        TaskId id,
+        string fileName,
+        string content,
+        CancellationToken cancellationToken)
+    {
+        ValidateArtifactFileName(
+            fileName);
+
+        var path = Path.Combine(
+            GetRunDirectory(id),
+            fileName);
+
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(path)
+            ?? throw new InvalidOperationException(
+                "Unable to resolve run directory."));
+
+        await File.WriteAllTextAsync(
+            path,
+            content,
             cancellationToken);
     }
 
@@ -103,12 +133,14 @@ public sealed class JsonRunStore : IRunStore
             return null;
         }
 
-        await using var stream = File.OpenRead(path);
+        await using var stream =
+            File.OpenRead(path);
 
-        return await JsonSerializer.DeserializeAsync<RunMetadata>(
-            stream,
-            JsonOptions,
-            cancellationToken);
+        return await JsonSerializer
+            .DeserializeAsync<RunMetadata>(
+                stream,
+                JsonOptions,
+                cancellationToken);
     }
 
     public async Task<IReadOnlyList<RunMetadata>> ListAsync(
@@ -120,12 +152,15 @@ public sealed class JsonRunStore : IRunStore
             return [];
         }
 
-        var result = new List<RunMetadata>();
+        var result =
+            new List<RunMetadata>();
 
-        foreach (var directory in Directory.EnumerateDirectories(
+        foreach (var directory in
+                 Directory.EnumerateDirectories(
                      _runsDirectory))
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken
+                .ThrowIfCancellationRequested();
 
             var path = Path.Combine(
                 directory,
@@ -138,13 +173,15 @@ public sealed class JsonRunStore : IRunStore
 
             try
             {
-                await using var stream = File.OpenRead(path);
+                await using var stream =
+                    File.OpenRead(path);
 
                 var metadata =
-                    await JsonSerializer.DeserializeAsync<RunMetadata>(
-                        stream,
-                        JsonOptions,
-                        cancellationToken);
+                    await JsonSerializer
+                        .DeserializeAsync<RunMetadata>(
+                            stream,
+                            JsonOptions,
+                            cancellationToken);
 
                 if (metadata is not null)
                 {
@@ -153,20 +190,40 @@ public sealed class JsonRunStore : IRunStore
             }
             catch (JsonException)
             {
-                // Keep listing usable if a previous run was interrupted mid-write.
+                // Keep listing usable if a previous run
+                // was interrupted mid-write.
             }
         }
 
         return result
-            .OrderByDescending(x => x.StartedAt)
+            .OrderByDescending(
+                x => x.StartedAt)
             .Take(limit)
             .ToArray();
     }
 
-    private string GetRunDirectory(TaskId id) =>
+    private string GetRunDirectory(
+        TaskId id) =>
         Path.Combine(
             _runsDirectory,
             id.Value);
+
+    private static void ValidateArtifactFileName(
+        string fileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            fileName);
+
+        if (!string.Equals(
+                fileName,
+                Path.GetFileName(fileName),
+                StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Artifact file name must not contain a directory path.",
+                nameof(fileName));
+        }
+    }
 
     private static async Task WriteJsonAsync<T>(
         string path,
@@ -178,7 +235,8 @@ public sealed class JsonRunStore : IRunStore
             ?? throw new InvalidOperationException(
                 "Unable to resolve run directory."));
 
-        await using var stream = File.Create(path);
+        await using var stream =
+            File.Create(path);
 
         await JsonSerializer.SerializeAsync(
             stream,
