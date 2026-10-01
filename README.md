@@ -1,6 +1,6 @@
 # TaskForge
 
-Local orchestrator for controlled AI-assisted software development.
+TaskForge is a local orchestrator for controlled AI-assisted software development.
 
 Architecture:
 
@@ -9,16 +9,35 @@ Architecture:
 
 ## Current status
 
-Phase 1 skeleton:
+Phase 1 and Phase 2 foundations are implemented:
 
 - .NET 10 solution;
-- workflow state machine;
-- local JSON run store;
-- CLI commands `run`, `runs`, `show`;
-- tests and CI.
+- explicit workflow state machine;
+- local JSON run store and artifacts;
+- local Ollama structured-output client;
+- Planner agent;
+- deterministic repository search;
+- Explorer agent;
+- TaskPacket generation;
+- CLI commands `run`, `runs`, and `show`;
+- tests and GitHub Actions CI.
 
-The current `run` command intentionally stops at `NeedsUser`.
-Ollama Planner/Explorer integration is Phase 2.
+The current workflow intentionally stops at `NeedsUser` after producing
+`task-packet.json`. Codex implementation is Phase 3.
+
+## Requirements
+
+- .NET 10 SDK
+- Ollama reachable from the machine running TaskForge
+- a configured local coding model
+
+Defaults:
+
+```text
+TASKFORGE_OLLAMA_URL=http://localhost:11434/
+TASKFORGE_OLLAMA_MODEL=qwen3-coder
+TASKFORGE_OLLAMA_TIMEOUT_SECONDS=120
+```
 
 ## Usage
 
