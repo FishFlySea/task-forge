@@ -42,7 +42,9 @@ public sealed class CodexCliClient(
         return new CodexRunResult(
             result.ExitCode,
             result.StandardOutput,
-            result.StandardError);
+            result.StandardError,
+            CodexJsonlUsageParser.Parse(
+                result.StandardOutput));
     }
 
     internal static IReadOnlyList<string> BuildArguments(

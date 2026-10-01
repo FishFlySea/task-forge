@@ -43,6 +43,26 @@ public sealed class TaskOrchestratorTests
             1,
             store.LastMetadata?.CodexRuns);
 
+        Assert.Equal(
+            1200,
+            store.LastMetadata?.CodexInputTokens);
+
+        Assert.Equal(
+            800,
+            store.LastMetadata?.CodexCachedInputTokens);
+
+        Assert.Equal(
+            100,
+            store.LastMetadata?.CodexCacheWriteInputTokens);
+
+        Assert.Equal(
+            250,
+            store.LastMetadata?.CodexOutputTokens);
+
+        Assert.Equal(
+            90,
+            store.LastMetadata?.CodexReasoningOutputTokens);
+
         Assert.Contains(
             "codex-01.jsonl",
             store.TextArtifacts);
@@ -106,7 +126,13 @@ public sealed class TaskOrchestratorTests
                 new CodexRunResult(
                     0,
                     "{\"type\":\"done\"}",
-                    string.Empty));
+                    string.Empty,
+                    new CodexUsage(
+                        InputTokens: 1200,
+                        CachedInputTokens: 800,
+                        CacheWriteInputTokens: 100,
+                        OutputTokens: 250,
+                        ReasoningOutputTokens: 90)));
     }
 
     private sealed class FakeDotnetRunner :

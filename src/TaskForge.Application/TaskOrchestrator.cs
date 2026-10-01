@@ -365,6 +365,17 @@ public sealed class TaskOrchestrator(
                 kind,
                 cancellationToken);
 
+        if (result.Usage is not null)
+        {
+            metadata = AccumulateUsage(
+                metadata,
+                result.Usage);
+
+            await _runStore.SaveMetadataAsync(
+                metadata,
+                cancellationToken);
+        }
+
         await _runStore.SaveTextArtifactAsync(
             metadata.Id,
             $"codex-{runNumber:00}.jsonl",
@@ -384,6 +395,7 @@ public sealed class TaskOrchestrator(
             {
                 result.ExitCode,
                 result.Success,
+                result.Usage,
                 Kind = kind.ToString()
             },
             cancellationToken);
@@ -518,6 +530,28 @@ public sealed class TaskOrchestrator(
             // Preserve the original workflow exception.
         }
     }
+
+    private static RunMetadata AccumulateUsage(
+        RunMetadata metadata,
+        CodexUsage usage) =>
+        metadata with
+        {
+            CodexInputTokens =
+                (metadata.CodexInputTokens ?? 0)
+                + usage.InputTokens,
+            CodexCachedInputTokens =
+                (metadata.CodexCachedInputTokens ?? 0)
+                + usage.CachedInputTokens,
+            CodexCacheWriteInputTokens =
+                (metadata.CodexCacheWriteInputTokens ?? 0)
+                + usage.CacheWriteInputTokens,
+            CodexOutputTokens =
+                (metadata.CodexOutputTokens ?? 0)
+                + usage.OutputTokens,
+            CodexReasoningOutputTokens =
+                (metadata.CodexReasoningOutputTokens ?? 0)
+                + usage.ReasoningOutputTokens
+        };
 
     private static string Truncate(
         string value,
