@@ -238,13 +238,19 @@ internal static class Program
         }
 
         Console.WriteLine(
-            $"{"ID",-30} {"STATE",-16} {"CODEX",-7} STARTED");
+            $"{"ID",-30} {"STATE",-16} {"CODEX",-7} {"IN/OUT",-20} STARTED");
 
         foreach (var run in runs)
         {
+            var tokens =
+                run.CodexInputTokens is null
+                && run.CodexOutputTokens is null
+                    ? "-"
+                    : $"{run.CodexInputTokens ?? 0}/{run.CodexOutputTokens ?? 0}";
+
             Console.WriteLine(
                 $"{run.Id.Value,-30} {run.State,-16} "
-                + $"{run.CodexRuns + "/2",-7} {run.StartedAt:O}");
+                + $"{run.CodexRuns + "/2",-7} {tokens,-20} {run.StartedAt:O}");
         }
 
         return 0;
@@ -288,6 +294,21 @@ internal static class Program
             $"Finished:   {metadata.FinishedAt:O}");
         Console.WriteLine(
             $"Codex runs: {metadata.CodexRuns}");
+
+        if (metadata.CodexInputTokens is not null
+            || metadata.CodexOutputTokens is not null)
+        {
+            Console.WriteLine(
+                $"Input:      {metadata.CodexInputTokens ?? 0}");
+            Console.WriteLine(
+                $"  cached:   {metadata.CodexCachedInputTokens ?? 0}");
+            Console.WriteLine(
+                $"  cache wr: {metadata.CodexCacheWriteInputTokens ?? 0}");
+            Console.WriteLine(
+                $"Output:     {metadata.CodexOutputTokens ?? 0}");
+            Console.WriteLine(
+                $"  reasoning:{metadata.CodexReasoningOutputTokens ?? 0}");
+        }
 
         if (!string.IsNullOrWhiteSpace(
                 metadata.Message))

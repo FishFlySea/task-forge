@@ -75,3 +75,9 @@ Set `TASKFORGE_RUNS_DIRECTORY` to override the local run storage directory.
 
 Each run stores its plan, exploration result, task packet, Codex JSONL trace,
 build/test logs, diagnosis (if needed), git snapshot, review, and final state.
+
+TaskForge also parses the final `turn.completed.usage` event from each Codex JSONL
+stream and accumulates input, cached-input, cache-write, output, and reasoning-output
+token counts in `state.json`. The `runs` command shows aggregate input/output usage;
+`show <run-id>` shows the detailed breakdown. If Codex terminates without a usage
+event, the workflow continues and the counters remain unavailable for that invocation.
