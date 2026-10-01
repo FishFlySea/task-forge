@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../TaskForge.Core/TaskForge.Core.csproj" />
+    <ProjectReference Include="../TaskForge.Application/TaskForge.Application.csproj" />
+  </ItemGroup>
+</Project>

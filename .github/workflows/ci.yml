@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore TaskForge.slnx
+      - run: dotnet build TaskForge.slnx -c Release --no-restore
+      - run: dotnet test TaskForge.slnx -c Release --no-build
