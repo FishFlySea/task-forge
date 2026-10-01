@@ -27,21 +27,9 @@ public sealed class CodexCliClient(
                 ? _options.ImplementationTokenBudget
                 : _options.CorrectionTokenBudget;
 
-        var arguments = new[]
-        {
-            "--disable",
-            "multi_agent",
-            "-c",
-            "features.rollout_budget.enabled=true",
-            "-c",
-            $"features.rollout_budget.limit_tokens={tokenBudget}",
-            "exec",
-            "--json",
-            "--ephemeral",
-            "--sandbox",
-            "workspace-write",
-            request.Prompt
-        };
+        var arguments = BuildArguments(
+            request,
+            tokenBudget);
 
         var result =
             await ExternalProcessRunner.RunAsync(
@@ -56,6 +44,24 @@ public sealed class CodexCliClient(
             result.StandardOutput,
             result.StandardError);
     }
+
+    internal static IReadOnlyList<string> BuildArguments(
+        CodexRunRequest request,
+        int tokenBudget) =>
+        [
+            "--disable",
+            "multi_agent",
+            "-c",
+            "features.rollout_budget.enabled=true",
+            "-c",
+            $"features.rollout_budget.limit_tokens={tokenBudget}",
+            "exec",
+            "--json",
+            "--ephemeral",
+            "--sandbox",
+            "workspace-write",
+            request.Prompt
+        ];
 
     private static CodexCliOptions Validate(
         CodexCliOptions options)
