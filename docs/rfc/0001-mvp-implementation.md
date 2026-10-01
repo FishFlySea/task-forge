@@ -1,6 +1,6 @@
 # RFC-0001: MVP реализации TaskForge
 
-- **Статус:** Proposed
+- **Статус:** Implemented
 - **Дата:** 2026-10-01
 - **Связанный ADR:** [ADR-0001](../adr/0001-controlled-multi-agent-architecture.md)
 - **Стек:** .NET 10, Ollama, Codex CLI, Git, dotnet CLI
@@ -482,7 +482,7 @@ codex exec --json --full-auto "<prompt>"
 
 JSONL stdout сохраняется как artifact run и может использоваться для подсчёта tool calls и token usage.
 
-`--full-auto` разрешается только для implementation/correction worker внутри выделенного workspace. Для read-only Codex задач этот флаг не используется.
+`multi_agent` отключается CLI-флагом с максимальным приоритетом над пользовательской конфигурацией, поэтому Codex worker технически не может порождать subagents. `workspace-write` даёт worker право изменять рабочее дерево без выдачи полного доступа к машине. `--ephemeral` не сохраняет rollout-сессию после выполнения.
 
 ## 12. Prompt Codex worker
 
