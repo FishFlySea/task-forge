@@ -253,7 +253,7 @@ internal static class Program
         string value)
     {
         if (!value.EndsWith(
-                '/',
+                "/",
                 StringComparison.Ordinal))
         {
             value += "/";
