@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TaskForge.Core/TaskForge.Core.csproj" />
+    <ProjectReference Include="../TaskForge.Application/TaskForge.Application.csproj" />
+    <ProjectReference Include="../TaskForge.Infrastructure/TaskForge.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
