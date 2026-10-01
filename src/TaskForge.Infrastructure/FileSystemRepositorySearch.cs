@@ -112,11 +112,6 @@ public sealed class FileSystemRepositorySearch(
                 continue;
             }
 
-            if (content.Length > _maxContentChars)
-            {
-                content = content[.._maxContentChars];
-            }
-
             var relativePath = Path
                 .GetRelativePath(root, file)
                 .Replace('\\', '/');
@@ -126,14 +121,21 @@ public sealed class FileSystemRepositorySearch(
                 content,
                 terms);
 
-            if (score > 0)
+            if (score <= 0)
             {
-                matches.Add(
-                    new RepositoryFileCandidate(
-                        relativePath,
-                        content,
-                        score));
+                continue;
             }
+
+            if (content.Length > _maxContentChars)
+            {
+                content = content[.._maxContentChars];
+            }
+
+            matches.Add(
+                new RepositoryFileCandidate(
+                    relativePath,
+                    content,
+                    score));
         }
 
         return matches

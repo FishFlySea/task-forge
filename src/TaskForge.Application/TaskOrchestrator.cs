@@ -261,7 +261,9 @@ public sealed class TaskOrchestrator(
                     Diagnostics =
                         diagnosis.Summary
                         + Environment.NewLine
-                        + failure.CombinedOutput
+                        + Truncate(
+                            failure.CombinedOutput,
+                            24_000)
                 };
 
                 CodexExecution correction;
@@ -516,6 +518,15 @@ public sealed class TaskOrchestrator(
             // Preserve the original workflow exception.
         }
     }
+
+    private static string Truncate(
+        string value,
+        int maxChars) =>
+        value.Length <= maxChars
+            ? value
+            : value[..maxChars]
+              + Environment.NewLine
+              + "[truncated]";
 
     private sealed record CodexExecution(
         RunMetadata Metadata,
