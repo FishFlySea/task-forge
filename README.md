@@ -36,7 +36,10 @@ Completed / NeedsUser / Failed / BudgetExceeded
 ```
 
 TaskForge launches Codex with the `multi_agent` feature explicitly disabled.
-The budget permits exactly one implementation run and at most one correction run.
+The hard run budget permits exactly one implementation run and at most one
+correction run. Each Codex invocation also enables Codex rollout-budget tracking:
+40k weighted tokens for implementation and 20k for correction by default.
+Both token limits are configurable through environment variables.
 
 ## Requirements
 
@@ -54,6 +57,8 @@ TASKFORGE_OLLAMA_MODEL=qwen3-coder
 TASKFORGE_OLLAMA_TIMEOUT_SECONDS=120
 TASKFORGE_CODEX_EXECUTABLE=codex
 TASKFORGE_CODEX_TIMEOUT_SECONDS=1200
+TASKFORGE_CODEX_IMPLEMENTATION_TOKEN_BUDGET=40000
+TASKFORGE_CODEX_CORRECTION_TOKEN_BUDGET=20000
 TASKFORGE_DOTNET_EXECUTABLE=dotnet
 ```
 

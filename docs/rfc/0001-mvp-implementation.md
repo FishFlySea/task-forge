@@ -482,7 +482,7 @@ codex exec --json --full-auto "<prompt>"
 
 JSONL stdout сохраняется как artifact run и может использоваться для подсчёта tool calls и token usage.
 
-`multi_agent` отключается CLI-флагом с максимальным приоритетом над пользовательской конфигурацией, поэтому Codex worker технически не может порождать subagents. `workspace-write` даёт worker право изменять рабочее дерево без выдачи полного доступа к машине. `--ephemeral` не сохраняет rollout-сессию после выполнения.
+`multi_agent` отключается CLI-флагом с максимальным приоритетом над пользовательской конфигурацией, поэтому Codex worker технически не может порождать subagents. `workspace-write` даёт worker право изменять рабочее дерево без выдачи полного доступа к машине. `--ephemeral` не сохраняет rollout-сессию после выполнения. Дополнительно каждый вызов включает `features.rollout_budget` через CLI overrides; в MVP используются отдельные лимиты 40000 weighted tokens для implementation и 20000 для correction. Таймаут процесса остаётся независимым внешним ограничителем.
 
 ## 12. Prompt Codex worker
 

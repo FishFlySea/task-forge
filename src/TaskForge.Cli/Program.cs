@@ -152,7 +152,15 @@ internal static class Program
                     TimeSpan.FromSeconds(
                         GetPositiveIntEnvironmentVariable(
                             "TASKFORGE_CODEX_TIMEOUT_SECONDS",
-                            1200))
+                            1200)),
+                ImplementationTokenBudget =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_CODEX_IMPLEMENTATION_TOKEN_BUDGET",
+                        40_000),
+                CorrectionTokenBudget =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_CODEX_CORRECTION_TOKEN_BUDGET",
+                        20_000)
             };
 
         var implementer =

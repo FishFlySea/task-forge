@@ -7,7 +7,10 @@ public sealed class CodexCliClient(
     CodexCliOptions options) : ICodexClient
 {
     private readonly CodexCliOptions _options =
-        options ?? throw new ArgumentNullException(nameof(options));
+        Validate(
+            options
+            ?? throw new ArgumentNullException(
+                nameof(options)));
 
     public async Task<CodexRunResult> ExecuteAsync(
         CodexRunRequest request,
@@ -19,10 +22,19 @@ public sealed class CodexCliClient(
         ArgumentException.ThrowIfNullOrWhiteSpace(
             request.Prompt);
 
+        var tokenBudget =
+            request.Kind == CodexRunKind.Implementation
+                ? _options.ImplementationTokenBudget
+                : _options.CorrectionTokenBudget;
+
         var arguments = new[]
         {
             "--disable",
             "multi_agent",
+            "-c",
+            "features.rollout_budget.enabled=true",
+            "-c",
+            $"features.rollout_budget.limit_tokens={tokenBudget}",
             "exec",
             "--json",
             "--ephemeral",
@@ -43,5 +55,35 @@ public sealed class CodexCliClient(
             result.ExitCode,
             result.StandardOutput,
             result.StandardError);
+    }
+
+    private static CodexCliOptions Validate(
+        CodexCliOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            options.Executable);
+
+        if (options.Timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "Codex timeout must be positive.");
+        }
+
+        if (options.ImplementationTokenBudget <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "Implementation token budget must be positive.");
+        }
+
+        if (options.CorrectionTokenBudget <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "Correction token budget must be positive.");
+        }
+
+        return options;
     }
 }
