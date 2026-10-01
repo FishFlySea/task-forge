@@ -489,15 +489,22 @@ public sealed class TaskOrchestrator(
         string message,
         CancellationToken cancellationToken)
     {
-        if (!WorkflowStateMachine.CanTransition(
-                metadata.State,
-                finalState))
-        {
-            return;
-        }
-
         try
         {
+            var persisted =
+                await _runStore.GetAsync(
+                    metadata.Id,
+                    cancellationToken);
+
+            metadata = persisted ?? metadata;
+
+            if (!WorkflowStateMachine.CanTransition(
+                    metadata.State,
+                    finalState))
+            {
+                return;
+            }
+
             await FinishAsync(
                 metadata,
                 finalState,
