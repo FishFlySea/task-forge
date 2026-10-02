@@ -96,6 +96,33 @@ public sealed class JsonRunStore : IRunStore
             cancellationToken);
     }
 
+    public async Task<T?> LoadArtifactAsync<T>(
+        TaskId id,
+        string fileName,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        ValidateArtifactFileName(
+            fileName);
+
+        var path = Path.Combine(
+            GetRunDirectory(id),
+            fileName);
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        await using var stream =
+            File.OpenRead(path);
+
+        return await JsonSerializer.DeserializeAsync<T>(
+            stream,
+            JsonOptions,
+            cancellationToken);
+    }
+
     public async Task SaveTextArtifactAsync(
         TaskId id,
         string fileName,

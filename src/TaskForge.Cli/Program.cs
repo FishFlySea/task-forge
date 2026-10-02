@@ -37,6 +37,14 @@ internal static class Program
                     store,
                     args[1..],
                     cancellation.Token),
+                "plan" => await PlanAsync(
+                    store,
+                    args[1..],
+                    cancellation.Token),
+                "apply" => await ApplyAsync(
+                    store,
+                    args[1..],
+                    cancellation.Token),
                 "runs" => await ListRunsAsync(
                     store,
                     cancellation.Token),
@@ -44,7 +52,8 @@ internal static class Program
                     store,
                     args[1..],
                     cancellation.Token),
-                _ => UnknownCommand(args[0])
+                _ => UnknownCommand(
+                    args[0])
             };
         }
         catch (OperationCanceledException)
@@ -60,6 +69,13 @@ internal static class Program
                 exception.Message);
 
             return 5;
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine(
+                exception.Message);
+
+            return 2;
         }
         catch (Exception exception)
         {
@@ -87,20 +103,86 @@ internal static class Program
         string[] args,
         CancellationToken cancellationToken)
     {
-        var (goal, repositoryPath) =
-            ParseRunArguments(args);
+        var request =
+            ParseTaskRequest(
+                args,
+                "run");
 
-        if (!Directory.Exists(
-                repositoryPath))
+        using var runtime =
+            CreateRuntime(
+                runStore);
+
+        var result =
+            await runtime.Orchestrator.RunAsync(
+                request,
+                cancellationToken);
+
+        PrintResult(
+            result);
+
+        return MapExitCode(
+            result.State);
+    }
+
+    private static async Task<int> PlanAsync(
+        IRunStore runStore,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        var request =
+            ParseTaskRequest(
+                args,
+                "plan");
+
+        using var runtime =
+            CreateRuntime(
+                runStore);
+
+        var result =
+            await runtime.Orchestrator.PlanAsync(
+                request,
+                cancellationToken);
+
+        PrintResult(
+            result);
+
+        return MapExitCode(
+            result.State);
+    }
+
+    private static async Task<int> ApplyAsync(
+        IRunStore runStore,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        if (args.Length != 1
+            || string.IsNullOrWhiteSpace(
+                args[0]))
         {
             throw new ArgumentException(
-                $"Repository path does not exist: {repositoryPath}");
+                "Usage: taskforge apply <run-id>");
         }
 
-        repositoryPath =
-            Path.GetFullPath(
-                repositoryPath);
+        using var runtime =
+            CreateRuntime(
+                runStore);
 
+        var result =
+            await runtime.Orchestrator.ApplyAsync(
+                new TaskId(
+                    args[0]),
+                cancellationToken);
+
+        PrintResult(
+            result);
+
+        return MapExitCode(
+            result.State);
+    }
+
+    private static OrchestratorRuntime CreateRuntime(
+        IRunStore runStore)
+    {
         var ollamaUrl =
             Environment.GetEnvironmentVariable(
                 "TASKFORGE_OLLAMA_URL")
@@ -116,7 +198,7 @@ internal static class Program
                 "TASKFORGE_OLLAMA_TIMEOUT_SECONDS",
                 120);
 
-        using var httpClient =
+        var httpClient =
             new HttpClient
             {
                 BaseAddress =
@@ -131,15 +213,6 @@ internal static class Program
             new OllamaClient(
                 httpClient,
                 ollamaModel);
-
-        var planner =
-            new PlannerAgent(
-                localLlm);
-
-        var explorer =
-            new ExplorerAgent(
-                localLlm,
-                new FileSystemRepositorySearch());
 
         var codexOptions =
             new CodexCliOptions
@@ -163,12 +236,7 @@ internal static class Program
                         20_000)
             };
 
-        var implementer =
-            new ImplementerAgent(
-                new CodexCliClient(
-                    codexOptions));
-
-        using var codexGate =
+        var codexGate =
             new CodexRunGate(
                 new AgentBudgetOptions
                 {
@@ -177,24 +245,26 @@ internal static class Program
                     MaxConcurrentCodexRuns = 1
                 });
 
-        var dotnetRunner =
-            new DotnetRunner(
-                new DotnetRunnerOptions
-                {
-                    Executable =
-                        Environment.GetEnvironmentVariable(
-                            "TASKFORGE_DOTNET_EXECUTABLE")
-                        ?? "dotnet"
-                });
-
         var orchestrator =
             new TaskOrchestrator(
                 runStore,
-                planner,
-                explorer,
-                implementer,
+                new PlannerAgent(
+                    localLlm),
+                new ExplorerAgent(
+                    localLlm,
+                    new FileSystemRepositorySearch()),
+                new ImplementerAgent(
+                    new CodexCliClient(
+                        codexOptions)),
                 codexGate,
-                dotnetRunner,
+                new DotnetRunner(
+                    new DotnetRunnerOptions
+                    {
+                        Executable =
+                            Environment.GetEnvironmentVariable(
+                                "TASKFORGE_DOTNET_EXECUTABLE")
+                            ?? "dotnet"
+                    }),
                 new GitClient(),
                 new DiagnosticAgent(
                     localLlm),
@@ -202,22 +272,10 @@ internal static class Program
                     localLlm),
                 TimeProvider.System);
 
-        var result =
-            await orchestrator.RunAsync(
-                new TaskRequest(
-                    goal,
-                    repositoryPath),
-                cancellationToken);
-
-        Console.WriteLine(
-            $"Run:   {result.Id}");
-        Console.WriteLine(
-            $"State: {result.State}");
-        Console.WriteLine(
-            result.Message);
-
-        return MapExitCode(
-            result.State);
+        return new OrchestratorRuntime(
+            orchestrator,
+            httpClient,
+            codexGate);
     }
 
     private static async Task<int> ListRunsAsync(
@@ -320,10 +378,9 @@ internal static class Program
         return 0;
     }
 
-    private static (
-        string Goal,
-        string RepositoryPath) ParseRunArguments(
-        string[] args)
+    private static TaskRequest ParseTaskRequest(
+        string[] args,
+        string command)
     {
         var repositoryPath =
             Directory.GetCurrentDirectory();
@@ -366,12 +423,31 @@ internal static class Program
                 goal))
         {
             throw new ArgumentException(
-                "Usage: taskforge run [--repo <path>] <task>");
+                $"Usage: taskforge {command} [--repo <path>] <task>");
         }
 
-        return (
+        if (!Directory.Exists(
+                repositoryPath))
+        {
+            throw new ArgumentException(
+                $"Repository path does not exist: {repositoryPath}");
+        }
+
+        return new TaskRequest(
             goal,
-            repositoryPath);
+            Path.GetFullPath(
+                repositoryPath));
+    }
+
+    private static void PrintResult(
+        TaskRunResult result)
+    {
+        Console.WriteLine(
+            $"Run:   {result.Id}");
+        Console.WriteLine(
+            $"State: {result.State}");
+        Console.WriteLine(
+            result.Message);
     }
 
     private static Uri NormalizeBaseAddress(
@@ -410,6 +486,7 @@ internal static class Program
         state switch
         {
             WorkflowState.Completed => 0,
+            WorkflowState.ReadyToApply => 0,
             WorkflowState.NeedsUser => 2,
             WorkflowState.BudgetExceeded => 3,
             WorkflowState.Cancelled => 4,
@@ -436,8 +513,27 @@ internal static class Program
         Console.WriteLine(
             "  taskforge run [--repo <path>] <task>");
         Console.WriteLine(
+            "  taskforge plan [--repo <path>] <task>");
+        Console.WriteLine(
+            "  taskforge apply <run-id>");
+        Console.WriteLine(
             "  taskforge runs");
         Console.WriteLine(
             "  taskforge show <run-id>");
+    }
+
+    private sealed class OrchestratorRuntime(
+        TaskOrchestrator orchestrator,
+        HttpClient httpClient,
+        CodexRunGate codexGate) : IDisposable
+    {
+        public TaskOrchestrator Orchestrator { get; } =
+            orchestrator;
+
+        public void Dispose()
+        {
+            codexGate.Dispose();
+            httpClient.Dispose();
+        }
     }
 }

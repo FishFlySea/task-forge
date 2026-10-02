@@ -6,6 +6,7 @@ public enum WorkflowState
     Planning,
     Exploring,
     PacketReady,
+    ReadyToApply,
     Implementing,
     Building,
     Testing,

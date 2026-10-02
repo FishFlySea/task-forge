@@ -19,6 +19,12 @@ public interface IRunStore
         T value,
         CancellationToken cancellationToken);
 
+    Task<T?> LoadArtifactAsync<T>(
+        TaskId id,
+        string fileName,
+        CancellationToken cancellationToken)
+        where T : class;
+
     Task SaveTextArtifactAsync(
         TaskId id,
         string fileName,
