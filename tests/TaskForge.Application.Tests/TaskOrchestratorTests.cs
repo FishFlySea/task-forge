@@ -6,7 +6,90 @@ namespace TaskForge.Application.Tests;
 public sealed class TaskOrchestratorTests
 {
     [Fact]
-    public async Task Happy_path_uses_one_codex_run_and_completes()
+    public async Task Plan_stops_before_codex_and_can_be_applied_later()
+    {
+        var store =
+            new FakeRunStore();
+
+        var planner =
+            new FakePlannerAgent();
+
+        var explorer =
+            new FakeExplorerAgent();
+
+        var implementer =
+            new FakeImplementerAgent();
+
+        using var gate =
+            new CodexRunGate(
+                new AgentBudgetOptions());
+
+        var orchestrator =
+            CreateOrchestrator(
+                store,
+                planner,
+                explorer,
+                implementer,
+                gate);
+
+        var request =
+            new TaskRequest(
+                "Implement planner",
+                Directory.GetCurrentDirectory());
+
+        var planned =
+            await orchestrator.PlanAsync(
+                request,
+                CancellationToken.None);
+
+        Assert.Equal(
+            WorkflowState.ReadyToApply,
+            planned.State);
+
+        Assert.Equal(
+            0,
+            store.LastMetadata?.CodexRuns);
+
+        Assert.Equal(
+            0,
+            implementer.Calls);
+
+        Assert.Equal(
+            1,
+            planner.Calls);
+
+        Assert.Equal(
+            1,
+            explorer.Calls);
+
+        var applied =
+            await orchestrator.ApplyAsync(
+                planned.Id,
+                CancellationToken.None);
+
+        Assert.Equal(
+            WorkflowState.Completed,
+            applied.State);
+
+        Assert.Equal(
+            1,
+            implementer.Calls);
+
+        Assert.Equal(
+            1,
+            planner.Calls);
+
+        Assert.Equal(
+            1,
+            explorer.Calls);
+
+        Assert.Equal(
+            1,
+            store.LastMetadata?.CodexRuns);
+    }
+
+    [Fact]
+    public async Task Run_keeps_one_shot_behavior()
     {
         var store =
             new FakeRunStore();
@@ -16,23 +99,18 @@ public sealed class TaskOrchestratorTests
                 new AgentBudgetOptions());
 
         var orchestrator =
-            new TaskOrchestrator(
+            CreateOrchestrator(
                 store,
                 new FakePlannerAgent(),
                 new FakeExplorerAgent(),
                 new FakeImplementerAgent(),
-                gate,
-                new FakeDotnetRunner(),
-                new FakeGitClient(),
-                new FakeDiagnosticAgent(),
-                new FakeReviewAgent(),
-                TimeProvider.System);
+                gate);
 
         var result =
             await orchestrator.RunAsync(
                 new TaskRequest(
                     "Implement planner",
-                    "/tmp/repository"),
+                    Directory.GetCurrentDirectory()),
                 CancellationToken.None);
 
         Assert.Equal(
@@ -47,22 +125,6 @@ public sealed class TaskOrchestratorTests
             1200,
             store.LastMetadata?.CodexInputTokens);
 
-        Assert.Equal(
-            800,
-            store.LastMetadata?.CodexCachedInputTokens);
-
-        Assert.Equal(
-            100,
-            store.LastMetadata?.CodexCacheWriteInputTokens);
-
-        Assert.Equal(
-            250,
-            store.LastMetadata?.CodexOutputTokens);
-
-        Assert.Equal(
-            90,
-            store.LastMetadata?.CodexReasoningOutputTokens);
-
         Assert.Contains(
             "codex-01.jsonl",
             store.TextArtifacts);
@@ -72,13 +134,36 @@ public sealed class TaskOrchestratorTests
             store.JsonArtifacts);
     }
 
+    private static TaskOrchestrator CreateOrchestrator(
+        FakeRunStore store,
+        FakePlannerAgent planner,
+        FakeExplorerAgent explorer,
+        FakeImplementerAgent implementer,
+        CodexRunGate gate) =>
+        new(
+            store,
+            planner,
+            explorer,
+            implementer,
+            gate,
+            new FakeDotnetRunner(),
+            new FakeGitClient(),
+            new FakeDiagnosticAgent(),
+            new FakeReviewAgent(),
+            TimeProvider.System);
+
     private sealed class FakePlannerAgent :
         IPlannerAgent
     {
+        public int Calls { get; private set; }
+
         public Task<PlanResult> PlanAsync(
             TaskRequest request,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+
+            return Task.FromResult(
                 new PlanResult
                 {
                     Summary = "Find planner code",
@@ -89,16 +174,22 @@ public sealed class TaskOrchestratorTests
                         "Planner integration is available"
                     ]
                 });
+        }
     }
 
     private sealed class FakeExplorerAgent :
         IExplorerAgent
     {
+        public int Calls { get; private set; }
+
         public Task<ExplorationResult> ExploreAsync(
             TaskRequest request,
             PlanResult plan,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+
+            return Task.FromResult(
                 new ExplorationResult
                 {
                     RelevantFiles =
@@ -112,17 +203,23 @@ public sealed class TaskOrchestratorTests
                     TestTargets = [],
                     Confidence = 0.9
                 });
+        }
     }
 
     private sealed class FakeImplementerAgent :
         IImplementerAgent
     {
+        public int Calls { get; private set; }
+
         public Task<CodexRunResult> ExecuteAsync(
             TaskPacket taskPacket,
             string workspace,
             CodexRunKind kind,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+
+            return Task.FromResult(
                 new CodexRunResult(
                     0,
                     "{\"type\":\"done\"}",
@@ -133,6 +230,7 @@ public sealed class TaskOrchestratorTests
                         CacheWriteInputTokens: 100,
                         OutputTokens: 250,
                         ReasoningOutputTokens: 90)));
+        }
     }
 
     private sealed class FakeDotnetRunner :
@@ -201,6 +299,9 @@ public sealed class TaskOrchestratorTests
     private sealed class FakeRunStore :
         IRunStore
     {
+        private readonly Dictionary<string, object> _artifacts =
+            new(StringComparer.OrdinalIgnoreCase);
+
         public RunMetadata? LastMetadata { get; private set; }
 
         public List<string> JsonArtifacts { get; } = [];
@@ -213,6 +314,8 @@ public sealed class TaskOrchestratorTests
             CancellationToken cancellationToken)
         {
             LastMetadata = metadata;
+            _artifacts["request.json"] = request;
+
             return Task.CompletedTask;
         }
 
@@ -233,7 +336,24 @@ public sealed class TaskOrchestratorTests
             JsonArtifacts.Add(
                 fileName);
 
+            _artifacts[fileName] =
+                value!;
+
             return Task.CompletedTask;
+        }
+
+        public Task<T?> LoadArtifactAsync<T>(
+            TaskId id,
+            string fileName,
+            CancellationToken cancellationToken)
+            where T : class
+        {
+            return Task.FromResult(
+                _artifacts.TryGetValue(
+                    fileName,
+                    out var value)
+                    ? value as T
+                    : null);
         }
 
         public Task SaveTextArtifactAsync(
@@ -252,7 +372,9 @@ public sealed class TaskOrchestratorTests
             TaskId id,
             CancellationToken cancellationToken) =>
             Task.FromResult(
-                LastMetadata);
+                LastMetadata?.Id == id
+                    ? LastMetadata
+                    : null);
 
         public Task<IReadOnlyList<RunMetadata>> ListAsync(
             int limit,

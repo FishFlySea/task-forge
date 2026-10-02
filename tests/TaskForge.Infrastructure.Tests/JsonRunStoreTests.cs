@@ -63,6 +63,18 @@ public sealed class JsonRunStoreTests : IDisposable
             "hello",
             CancellationToken.None);
 
+        var loadedPlan =
+            await store.LoadArtifactAsync<PlanResult>(
+                id,
+                "plan.json",
+                CancellationToken.None);
+
+        var loadedRequest =
+            await store.LoadArtifactAsync<TaskRequest>(
+                id,
+                "request.json",
+                CancellationToken.None);
+
         var loaded =
             await store.GetAsync(
                 id,
@@ -72,6 +84,20 @@ public sealed class JsonRunStoreTests : IDisposable
             await store.ListAsync(
                 10,
                 CancellationToken.None);
+
+        Assert.NotNull(
+            loadedPlan);
+
+        Assert.Equal(
+            "test",
+            loadedPlan.Summary);
+
+        Assert.NotNull(
+            loadedRequest);
+
+        Assert.Equal(
+            request,
+            loadedRequest);
 
         Assert.NotNull(
             loaded);
@@ -113,6 +139,12 @@ public sealed class JsonRunStoreTests : IDisposable
                 new TaskId("tf-test"),
                 "../escape.json",
                 new { Value = 1 },
+                CancellationToken.None));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => store.LoadArtifactAsync<PlanResult>(
+                new TaskId("tf-test"),
+                "../escape.json",
                 CancellationToken.None));
 
         await Assert.ThrowsAsync<ArgumentException>(

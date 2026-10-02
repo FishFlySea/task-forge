@@ -64,9 +64,29 @@ TASKFORGE_DOTNET_EXECUTABLE=dotnet
 
 ## Usage
 
+One-shot execution remains available:
+
 ```bash
 dotnet run --project src/TaskForge.Cli -- run "Fix the failing test"
 dotnet run --project src/TaskForge.Cli -- run --repo ../some-repo "Fix the failing test"
+```
+
+For quota-sensitive work, prepare the task without starting Codex:
+
+```bash
+dotnet run --project src/TaskForge.Cli -- plan --repo ../some-repo "Fix the failing test"
+```
+
+This performs Planner + Explorer locally, stores `task-packet.json`, and stops in
+`ReadyToApply` with `CodexRuns = 0`. Apply that exact saved packet later:
+
+```bash
+dotnet run --project src/TaskForge.Cli -- apply tf-20261002-120000-a1b2
+```
+
+Inspect runs:
+
+```bash
 dotnet run --project src/TaskForge.Cli -- runs
 dotnet run --project src/TaskForge.Cli -- show <run-id>
 ```
