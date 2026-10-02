@@ -29,8 +29,25 @@ public sealed class TaskOrchestrator(
         TaskRequest request,
         CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.Goal);
-        ArgumentException.ThrowIfNullOrWhiteSpace(request.RepositoryPath);
+        var planned = await PlanAsync(
+            request,
+            cancellationToken);
+
+        if (planned.State != WorkflowState.ReadyToApply)
+        {
+            return planned;
+        }
+
+        return await ApplyAsync(
+            planned.Id,
+            cancellationToken);
+    }
+
+    public async Task<TaskRunResult> PlanAsync(
+        TaskRequest request,
+        CancellationToken cancellationToken)
+    {
+        ValidateRequest(request);
 
         var startedAt = _timeProvider.GetUtcNow();
         var metadata = new RunMetadata
@@ -93,11 +110,105 @@ public sealed class TaskOrchestrator(
 
             metadata = await TransitionAsync(
                 metadata,
-                WorkflowState.PacketReady,
+                WorkflowState.ReadyToApply,
                 cancellationToken);
 
-            metadata = await TransitionAsync(
+            const string message =
+                "Task packet prepared. No Codex run has been used. "
+                + "Run 'taskforge apply <run-id>' to execute it.";
+
+            metadata = metadata with
+            {
+                Message = message
+            };
+
+            await _runStore.SaveMetadataAsync(
                 metadata,
+                cancellationToken);
+
+            return new TaskRunResult(
+                metadata.Id,
+                metadata.State,
+                message);
+        }
+        catch (OperationCanceledException)
+        {
+            await TryFinishAsync(
+                metadata,
+                WorkflowState.Cancelled,
+                "Planning cancelled.",
+                CancellationToken.None);
+
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await TryFinishAsync(
+                metadata,
+                WorkflowState.Failed,
+                exception.Message,
+                CancellationToken.None);
+
+            throw;
+        }
+    }
+
+    public async Task<TaskRunResult> ApplyAsync(
+        TaskId taskId,
+        CancellationToken cancellationToken)
+    {
+        var metadata =
+            await _runStore.GetAsync(
+                taskId,
+                cancellationToken)
+            ?? throw new ArgumentException(
+                $"Run not found: {taskId}");
+
+        if (metadata.State
+            is not WorkflowState.ReadyToApply
+            and not WorkflowState.PacketReady)
+        {
+            throw new InvalidOperationException(
+                $"Run {taskId} cannot be applied from state '{metadata.State}'.");
+        }
+
+        var request =
+            await _runStore.LoadArtifactAsync<TaskRequest>(
+                taskId,
+                "request.json",
+                cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Run {taskId} does not contain request.json.");
+
+        var taskPacket =
+            await _runStore.LoadArtifactAsync<TaskPacket>(
+                taskId,
+                "task-packet.json",
+                cancellationToken)
+            ?? throw new InvalidOperationException(
+                $"Run {taskId} does not contain task-packet.json.");
+
+        ValidateRequest(request);
+
+        if (!string.Equals(
+                Path.GetFullPath(request.RepositoryPath),
+                Path.GetFullPath(metadata.RepositoryPath),
+                OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Stored request repository does not match run metadata.");
+        }
+
+        try
+        {
+            metadata = await TransitionAsync(
+                metadata with
+                {
+                    FinishedAt = null,
+                    Message = null
+                },
                 WorkflowState.Implementing,
                 cancellationToken);
 
@@ -528,6 +639,22 @@ public sealed class TaskOrchestrator(
         catch
         {
             // Preserve the original workflow exception.
+        }
+    }
+
+    private static void ValidateRequest(
+        TaskRequest request)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            request.Goal);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            request.RepositoryPath);
+
+        if (!Directory.Exists(request.RepositoryPath))
+        {
+            throw new ArgumentException(
+                $"Repository path does not exist: {request.RepositoryPath}");
         }
     }
 
