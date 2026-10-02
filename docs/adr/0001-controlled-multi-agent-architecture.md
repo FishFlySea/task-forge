@@ -1,766 +1,276 @@
-# ADR-0001: Контролируемая мультиагентная архитектура TaskForge
+# ADR-0001: Контролируемая оркестрация AI-workers
 
 - **Статус:** Accepted
 - **Дата:** 2026-10-01
+- **Пересмотр:** 2026-10-02
 - **Проект:** TaskForge
-- **Область:** AI-assisted development / agent orchestration
-- **Основной стек:** .NET 10, Ollama, Codex, Git, dotnet CLI
-
-## 1. Контекст
 
-TaskForge должен выполнять задачи разработки с помощью нескольких специализированных агентов, при этом расход дорогих модельных вызовов должен оставаться предсказуемым и ограниченным.
-
-Использование Codex как автономного координатора, способного порождать дочерних агентов, приводит к нескольким проблемам:
-
-- каждый дочерний агент получает отдельный контекст и выполняет собственные модельные вызовы;
-- разные агенты повторно исследуют одни и те же части репозитория;
-- значительная часть дорогого контекста тратится на поиск файлов, чтение проекта, анализ логов и тестов;
-- количество вызовов Codex сложнее ограничить снаружи;
-- рекурсивная или широкая параллельная мультиагентность может быстро исчерпать доступную квоту.
-
-Большинство подготовительных операций не требуют использования наиболее дорогой модели.
+## Контекст
 
-## 2. Проблема
+TaskForge должен выполнять задачи разработки с помощью локальных моделей и Codex, не превращая один пользовательский запрос в неконтролируемое дерево дорогих model runs.
 
-Необходимо построить мультиагентную систему разработки, которая:
+Основной риск встроенной мультиагентности coding-agent состоит не только в цене одного вызова. Координатор может создавать дополнительные workers, повторно исследовать репозиторий, дублировать контекст и тем самым делать расход квоты и время выполнения плохо предсказуемыми.
 
-1. поддерживает несколько специализированных ролей;
-2. не позволяет дорогим агентам неконтролируемо создавать других дорогих агентов;
-3. минимизирует количество вызовов Codex;
-4. использует локальную LLM для дешёвых операций;
-5. передаёт Codex минимальный достаточный контекст;
-6. позволяет задавать жёсткие лимиты на число вызовов и повторов;
-7. сохраняет Codex для сложной реализации и исправлений;
-8. может работать как локальный сервис;
-9. не зависит от конкретного UI или клиента Codex.
-
-## 3. Решение
-
-Мультиагентность реализуется на уровне собственного оркестратора TaskForge.
-
-Codex не является главным координатором системы. Он используется как дорогой специализированный worker для реализации или сложного исправления.
-
-Целевая схема:
-
-```text
-                         User
-                           │
-                           ▼
-                    TaskForge
-                  Agent Orchestrator
-                           │
-           ┌───────────────┼────────────────┐
-           │               │                │
-           ▼               ▼                ▼
-        Planner         Explorer        Tool Runner
-        Ollama          Ollama          deterministic
-           │               │                │
-           └───────────────┼────────────────┘
-                           │
-                           ▼
-                      TaskPacket
-                           │
-                           ▼
-                     Codex Worker
-                           │
-                           ▼
-                        git diff
-                           │
-                           ▼
-                     build / tests
-                           │
-                           ▼
-                  Local diagnostics
-                           │
-               ┌───────────┴───────────┐
-               │                       │
-             success                  failure
-               │                       │
-               ▼                       ▼
-            review              Codex Fix
-                                if required
-```
+При этом значительная часть workflow не требует coding-agent: поиск файлов, чтение git metadata, запуск build/test, первичная классификация, диагностика логов и review могут выполняться deterministic tools или локальной LLM.
 
-Ключевой принцип:
+## Решение
 
-> Codex используется для сложной части задачи, а не для управления всем процессом разработки.
-
-## 4. Принципы архитектуры
-
-### 4.1. Запрет рекурсивной мультиагентности Codex
-
-Codex-worker не должен запускать собственных дочерних агентов.
+### 1. TaskForge владеет orchestration
 
-Каждый его вызов получает инструкцию, аналогичную:
+Только TaskForge определяет:
 
-```text
-Do not spawn subagents.
+- текущий state;
+- следующий шаг workflow;
+- разрешён ли очередной Codex run;
+- какой workspace используется;
+- какие build/test команды считаются authoritative;
+- когда задача должна остановиться как `Completed`, `BudgetExceeded`, `NeedsUser`, `Failed` или `Cancelled`.
 
-You are an implementation worker.
-
-Repository exploration and task decomposition have already been performed
-by the orchestrator.
+LLM может вернуть structured recommendation, но не меняет state самостоятельно и не может увеличить собственный бюджет.
 
-Work primarily with the supplied task packet.
+### 2. Codex является leaf coding worker
 
-Inspect additional files only when required for implementation.
+Codex не используется как coordinator.
 
-Do not perform broad repository exploration.
+Запрет subagents обеспечивается в два слоя:
 
-After implementation:
-1. run relevant tests if allowed;
-2. report changed files;
-3. report unresolved issues;
-4. stop.
-```
+1. **hard enforcement на запуске** — multi-agent capability отключается launcher-конфигурацией/CLI override; worker запускается в ограниченном sandbox, с фиксированной approval policy, внешним timeout и process-tree kill;
+2. **prompt contract** — worker дополнительно получает инструкцию не делегировать задачу и не запускать subagents.
 
-Создание и координация агентов выполняются только TaskForge.
+Prompt не считается security или budget boundary.
 
-### 4.2. Один уровень оркестрации
+Coding worker имеет отдельный side-effectful контракт. Он не является реализацией обычного request/response LLM provider.
 
-Не допускается дерево:
+Целевая граница:
 
-```text
-Orchestrator
-└── Agent
-    └── Agent
-        └── Agent
-```
-
-Используется плоская модель:
-
-```text
-Orchestrator
-├── Planner
-├── Explorer
-├── Implementer
-├── Diagnostic
-├── Tester
-└── Reviewer
-```
-
-Каждый агент является конечным исполнителем.
-
-### 4.3. Эскалация от дешёвого к дорогому
-
-Приоритет выполнения:
-
-```text
-Deterministic tools
-        ↓
-Local LLM
-        ↓
-Codex
-```
-
-Codex вызывается только при необходимости.
-
-## 5. Уровни выполнения
-
-### Tier 0 — deterministic tools
-
-Без LLM выполняются:
-
-- `rg`;
-- `git grep`;
-- `git diff`;
-- `git log`;
-- `dotnet build`;
-- `dotnet test`;
-- Roslyn/AST-анализ;
-- чтение project/solution-файлов;
-- поиск зависимостей и файлов.
-
-Стоимость LLM для этого уровня равна нулю.
-
-### Tier 1 — Local LLM
-
-Через Ollama выполняются:
-
-- классификация задачи;
-- декомпозиция;
-- определение релевантных файлов;
-- анализ stack trace;
-- анализ результатов тестов;
-- первичная диагностика;
-- простое ревью;
-- формирование TaskPacket;
-- оценка необходимости эскалации.
-
-### Tier 2 — Codex
-
-Codex используется для:
-
-- нетривиальной реализации;
-- сложного рефакторинга;
-- изменения нескольких взаимосвязанных модулей;
-- сложной concurrency-логики;
-- сложных запросов и инфраструктурных изменений;
-- исправления после неудачной локальной попытки.
-
-## 6. Роли агентов
-
-### Planner
-
-Определяет:
-
-- цель;
-- ограничения;
-- критерии готовности;
-- этапы;
-- необходимость Codex.
-
-По умолчанию работает через Ollama.
-
-### Explorer
-
-Исследует кодовую базу и определяет:
-
-- релевантные проекты;
-- классы;
-- методы;
-- тесты;
-- конфигурацию;
-- зависимости;
-- похожие реализации.
-
-Использует deterministic tools и Ollama.
-
-### Implementer
-
-Выполняет изменение кода.
-
-Для сложных задач используется Codex. Для простых изменений допускается локальная модель.
-
-### Tester
-
-Запускает сборку и тесты обычными процессами:
-
-```text
-dotnet build
-dotnet test
-```
-
-LLM для самого запуска тестов не используется.
-
-### Diagnostic Agent
-
-Анализирует ошибки сборки и тестов.
-
-Сначала используется Ollama. Codex вызывается только при необходимости.
-
-### Reviewer
-
-Проверяет итоговый diff:
-
-- соответствие задаче;
-- потенциальные регрессии;
-- очевидные ошибки;
-- избыточные изменения;
-- отсутствие тестов;
-- нарушения архитектуры.
-
-По умолчанию используется Ollama; Codex-review должен быть отдельным явно разрешённым режимом.
-
-## 7. TaskPacket
-
-Codex не должен самостоятельно исследовать весь репозиторий без необходимости.
-
-Оркестратор формирует компактный TaskPacket.
-
-Пример:
-
-```json
+~~~csharp
+public interface ICodingWorker
 {
-  "goal": "Fix PropertyBinding cleanup after Segment deletion",
-  "constraints": [
-    "Do not change public API",
-    "Preserve existing database schema if possible"
-  ],
-  "relevantFiles": [
-    "src/Operations/Services/PropertyBindingService.cs",
-    "src/Operations/Data/PropertyBindingConfiguration.cs",
-    "tests/Operations.Tests/PropertyBindingTests.cs"
-  ],
-  "diagnostics": {
-    "test": "PropertyBindingTests.DeleteSegment",
-    "error": "FK violation"
-  },
-  "observations": [
-    "DeleteSegmentAsync deletes Segment",
-    "PropertyBinding FK uses Restrict"
-  ],
-  "acceptanceCriteria": [
-    "Segment can be deleted",
-    "Related bindings are cleaned up",
-    "Existing tests pass"
-  ]
-}
-```
-
-Главный принцип работы с контекстом:
-
-> Context should be discovered cheaply and consumed expensively.
-
-Поиск и подготовка контекста выполняются дешёвыми средствами, а Codex получает уже отобранный набор данных.
-
-## 8. Контроль бюджета
-
-Оркестратор обязан контролировать использование Codex.
-
-Начальные значения:
-
-```text
-MaxConcurrentCodexRuns = 1
-MaxCodexRunsPerTask = 2
-MaxCodexRetries = 1
-```
-
-Позже могут быть добавлены:
-
-```text
-MaxInputTokens
-MaxOutputTokens
-MaxTaskCost
-MaxTaskDuration
-```
-
-Пример конфигурационной модели:
-
-```csharp
-public sealed record AgentBudget
-{
-    public int MaxCodexRuns { get; init; } = 2;
-    public int MaxRetries { get; init; } = 1;
-    public int MaxConcurrentCodexRuns { get; init; } = 1;
-}
-```
-
-При достижении лимита задача должна остановиться и вернуть текущий результат пользователю.
-
-## 9. Эскалация
-
-Результат агента должен явно сообщать, может ли workflow продолжаться на текущем уровне:
-
-```csharp
-public enum AgentResultStatus
-{
-    Completed,
-    NeedsMoreContext,
-    NeedsHigherTier,
-    Failed
-}
-```
-
-Пример результата:
-
-```csharp
-public sealed record AgentResult(
-    AgentResultStatus Status,
-    string Summary,
-    IReadOnlyList<string> RelevantFiles,
-    double Confidence);
-```
-
-Логика:
-
-```text
-Tool
- ↓
-Ollama
- ↓
-Codex
-```
-
-Обратная эскалация и неограниченные retry-loop не используются.
-
-## 10. Предлагаемая структура .NET
-
-```text
-TaskForge
-│
-├── Application
-│   ├── Tasks
-│   ├── Agents
-│   ├── Workflows
-│   └── Budget
-│
-├── Agents
-│   ├── PlannerAgent
-│   ├── ExplorerAgent
-│   ├── ImplementerAgent
-│   ├── DiagnosticAgent
-│   └── ReviewAgent
-│
-├── Providers
-│   ├── OllamaProvider
-│   └── CodexProvider
-│
-├── Tools
-│   ├── GitTool
-│   ├── SearchTool
-│   ├── DotnetTool
-│   ├── FileTool
-│   └── TestTool
-│
-└── Infrastructure
-    ├── Workspace
-    ├── ProcessRunner
-    └── TaskQueue
-```
-
-Базовые интерфейсы:
-
-```csharp
-public interface IAgent
-{
-    Task<AgentResult> ExecuteAsync(
-        AgentContext context,
+    Task<CodingWorkerResult> ExecuteAsync(
+        CodingTask task,
+        WorkspaceHandle workspace,
+        WorkerBudget budget,
         CancellationToken cancellationToken);
 }
-```
+~~~
 
-```csharp
-public interface ILlmProvider
-{
-    Task<LlmResponse> ExecuteAsync(
-        LlmRequest request,
-        CancellationToken cancellationToken);
-}
-```
+Результат worker должен позволять оркестратору получить как минимум diff/changed files, отчёт и usage.
 
-Провайдеры:
+Локальные Planner/Explorer/Diagnostic/Reviewer используют chat abstraction. Для .NET предпочтительным общим контрактом является `Microsoft.Extensions.AI.IChatClient` либо тонкий adapter над ним.
 
-```text
-OllamaProvider
-CodexProvider
-```
+### 3. Tier выбирается по типу операции, а не по self-confidence модели
 
-Роль агента не должна напрямую зависеть от конкретной модели.
+Канонические уровни:
 
-## 11. Workspace isolation
+~~~text
+Tier 0: deterministic tools
+Tier 1: local LLM reasoning without source-code side effects
+Tier 2: coding worker with repository side effects
+~~~
 
-Каждая задача должна в перспективе выполняться в отдельном Git workspace.
+Для MVP правила routing детерминированы:
 
-Предпочтительный механизм:
+- известная операция поиска/build/test/git -> Tier 0;
+- planning, context selection, diagnosis, review -> Tier 1;
+- изменение исходного кода -> Tier 2;
+- второй Tier-2 run допустим только как correction после результата authoritative build/test и Diagnostic step.
 
-```text
-git worktree
-```
+`Confidence` локальной модели допускается хранить как telemetry, но он **не используется как routing gate**, пока не появятся evals и калибровка.
 
-Например:
+Local code implementation в MVP отсутствует. Если он будет добавлен, необходимо отдельно выбрать механизм side effects: bounded agent loop с tools либо генерация patch с deterministic apply/validation. Ollama сама по себе не считается coding worker.
 
-```text
-repo/
-worktrees/
-    task-001/
-    task-002/
-```
+Переход от дорогого шага к локальной диагностике не является «downgrade той же операции»: это новый шаг workflow с другим контрактом.
 
-Это позволяет:
+### 4. Бюджет имеет одну семантику
 
-- параллельно выполнять независимые задачи;
-- не повреждать основной checkout;
-- безопасно отменять неудачные изменения;
-- ограничивать область файлов, доступную конкретному worker.
+Используется один счётчик:
 
-## 12. Workflow задачи
+~~~text
+MaxCodexRuns = 2
+~~~
 
-Стандартный workflow:
+Каждый фактически запущенный Codex process считается run, включая run, завершившийся ошибкой или timeout. Отдельных `MaxRetries` / `MaxCodexRetries` в архитектурной модели нет.
 
-```text
-Task received
-     │
-     ▼
-Planner
-     │
-     ▼
-Repository search
-     │
-     ▼
-Explorer
-     │
-     ▼
+Разрешённая последовательность:
+
+~~~text
+Implementation [1/2]
+  -> authoritative build/test
+  -> Diagnostic
+  -> optional Correction [2/2]
+  -> authoritative build/test
+~~~
+
+Третий run запрещён.
+
+Дополнительно каждый run обязан иметь:
+
+- `CodexRunTimeout`;
+- per-run token/rollout budget, если backend предоставляет enforcement;
+- глобальный concurrency gate, по умолчанию `MaxConcurrentCodexRuns = 1`;
+- CancellationToken с убийством всего дерева процессов при отмене/timeout.
+
+Usage из machine-readable Codex output собирается уже в MVP. Usage telemetry не заменяет hard run/token limits.
+
+### 5. Workspace isolation является обязательной частью решения
+
+Codex не должен изменять основной checkout.
+
+Каждый apply выполняется в отдельном git worktree, привязанном к сохранённому `baseCommit`. Sandbox и правила запуска процессов определены в [ADR-0002](0002-workspace-isolation-and-sandbox.md).
+
+До полной реализации ADR-0002 TaskForge допускается использовать только на доверенных локальных репозиториях.
+
+### 6. Build/test принадлежат оркестратору
+
+Codex может запускать targeted checks только если это разрешено worker policy. Их результат является advisory.
+
+Source of truth — команды, запущенные TaskForge после worker завершения. Именно эти результаты определяют переход в Review, Diagnostic или terminal state.
+
+### 7. TaskPacket является versioned bounded contract
+
+Перед запуском worker TaskForge сохраняет validated TaskPacket.
+
+Минимальный контракт содержит:
+
+- `schemaVersion`;
+- `taskId`;
+- `baseCommit`;
+- goal, constraints и acceptance criteria;
+- relevant paths **и выбранные file spans/excerpts**;
+- `writeScope`;
+- command/test policy;
+- remaining run budget и per-run token budget;
+- packet token budget;
+- diagnostics для correction run.
+
+Structured output локальных моделей валидируется по JSON Schema.
+
+Риск неполного context discovery считается отдельным архитектурным риском: Explorer может пропустить критичный файл. Поэтому worker имеет bounded право дочитать дополнительные файлы в worktree, а факт такого расширения контекста должен попадать в telemetry.
+
+### 8. Воспроизводимость означает replayable inputs, а не детерминированный LLM output
+
+Для каждого run сохраняются:
+
+- исходная задача;
+- `baseCommit`;
+- TaskPacket;
+- версии prompt templates;
+- provider/model и параметры inference;
+- seed, если backend его поддерживает;
+- версия Codex CLI и эффективные launch options;
+- build/test commands;
+- worker trace и usage;
+- diff/changed files;
+- terminal state.
+
+Это позволяет повторить тот же workflow input и расследовать расхождения, но не обещает byte-identical результат генеративной модели.
+
+## Канонический workflow
+
+Подробная state machine описана только в [docs/design/orchestrator.md](../design/orchestrator.md).
+
+На уровне ADR достаточно следующего инварианта:
+
+~~~text
+Plan/Explore
+    |
+    v
 TaskPacket
-     │
-     ▼
-Decide execution tier
-     │
-     ├── local implementation
-     │
-     └── Codex implementation
-              │
-              ▼
-          git diff
-              │
-              ▼
-         dotnet build
-              │
-              ▼
-          dotnet test
-              │
-       ┌──────┴──────┐
-       │             │
-     success       failure
-       │             │
-       │        Local diagnosis
-       │             │
-       │        ┌────┴────┐
-       │        │         │
-       │    local fix   Codex fix
-       │
-       ▼
-     review
-       │
-       ▼
-     DONE
-```
-
-## 13. Retry policy
-
-После неудачного исполнения:
-
-```text
-Codex
- ↓
-tests failed
- ↓
-local diagnostic
-```
-
-Только Diagnostic Agent может инициировать второй Codex-run.
-
-Максимальный стандартный сценарий:
-
-```text
-Codex implement
-      ↓
-tests
-      ↓
-local diagnosis
-      ↓
-Codex fix
-```
-
-После этого автоматические Codex-вызовы прекращаются.
-
-## 14. Параллельность
+    |
+    v
+Codex Implementation [1/2]
+    |
+    v
+orchestrator build/test
+    | success                 | failure
+    v                         v
+ Review                  Diagnostic (local)
+    |                         |
+    v                         +--> optional Codex Correction [2/2]
+ terminal                           |
+                                    v
+                              orchestrator build/test
+                                    |
+                                    v
+                                  terminal
+~~~
 
-Локальные операции могут выполняться параллельно.
+Неограниченных LLM loops нет.
 
-Например:
+## Метрики, по которым решение пересматривается
 
-```text
-           ┌── Explorer A
-Planner ───┼── Explorer B
-           └── Dependency Analyzer
-```
+TaskForge должен собирать как минимум:
 
-Codex по умолчанию выполняется последовательно:
+- Codex runs per task;
+- долю задач, прошедших без correction run;
+- input/output/weighted tokens per task;
+- долю `BudgetExceeded`;
+- долю `NeedsUser`;
+- Codex timeout/failure rate;
+- first-pass build/test success rate;
+- частоту, с которой worker вынужден читать файлы вне подготовленного context set;
+- долю correction, классифицированных как недостаточный/ошибочный TaskPacket.
 
-```text
-MaxConcurrentCodexRuns = 1
-```
+Без этих данных нельзя обоснованно менять routing или бюджет.
 
-Параллельность используется преимущественно там, где она не расходует дорогую квоту.
+## Рассмотренные альтернативы
 
-## 15. Наблюдаемость
+### Codex как автономный multi-agent coordinator
 
-Для каждого запуска необходимо сохранять:
+Отклонено как основной режим: TaskForge теряет внешний контроль над числом дорогих workers и общим workflow budget.
 
-```text
-TaskId
-Agent
-Provider
-Model
-StartTime
-Duration
-InputTokens
-OutputTokens
-CodexRunNumber
-ToolCalls
-Result
-```
+### Один Codex на всю задачу
 
-Это позволит определить реальную стоимость отдельных стадий и постепенно улучшать routing.
+Отклонено: дорогой worker тратит контекст на deterministic discovery и verification, а workflow хуже наблюдаем.
 
-## 16. Состояние workflow
+### Только локальная LLM
 
-Состояние задачи не должно существовать только внутри LLM-контекста.
+Отклонено как общий coding backend. Local LLM остаётся Tier 1; local coding worker может появиться позже только с явным side-effect contract и evals.
 
-TaskForge хранит:
+### Microsoft Agent Framework
 
-```text
-Task
-Plan
-RelevantFiles
-TaskPacket
-AgentResults
-Diff
-TestResults
-BudgetUsage
-```
+Это наиболее близкая готовая .NET-альтернатива собственному workflow runtime: framework поддерживает explicit workflows, typed executors, state/checkpointing и observability. Для текущего MVP TaskForge сохраняет небольшой собственный deterministic orchestrator, потому что ключевые budget/workspace invariants всё равно являются доменной логикой проекта.
 
-LLM рассматривается как stateless worker.
+Решение должно быть пересмотрено, если state machine станет существенно сложнее, появятся durable distributed workflows или human-in-the-loop checkpoints.
 
-## 17. Рассмотренные альтернативы
+### Semantic Kernel
 
-### Встроенная мультиагентность Codex
+Может использоваться как provider/tooling layer, но для новой orchestration-архитектуры Microsoft Agent Framework рассматривается раньше: Microsoft позиционирует его как следующий шаг развития agent/workflow abstractions.
 
-Плюсы:
+### LangGraph
 
-- минимум собственной инфраструктуры;
-- модель сама распределяет работу.
+Подходит для graph/state orchestration, но добавляет отдельный Python/TypeScript runtime в .NET-first проект. Не выбран для MVP.
 
-Минусы:
+### OpenHands / Aider
 
-- труднее контролировать число дорогих вызовов;
-- повторное исследование контекста;
-- сложнее обеспечить общий бюджет задачи;
-- слабее наблюдаемость.
+Рассмотрены как готовые coding harnesses и источник идей для repository context/editing. Они не выбраны orchestration core, поскольку TaskForge требуется собственный жёсткий бюджет и собственная state machine вокруг Codex.
 
-**Решение:** не использовать как основную архитектуру.
+## Последствия
 
-### Один Codex без оркестратора
+Положительные:
 
-Плюсы:
+- дорогие runs ограничены вне модели;
+- recursive multi-agent spending запрещён технически, а не только prompt-инструкцией;
+- build/test остаются deterministic control plane;
+- можно отдельно измерять качество context preparation и coding worker;
+- Codex можно заменить другим coding worker без изменения orchestration semantics.
 
-- простота.
+Отрицательные:
 
-Минусы:
+- требуется поддерживать state machine, budget gate, workspace manager и run artifacts;
+- sandbox/build isolation сложнее обычного запуска CLI;
+- context preparation становится критической частью качества;
+- часть возможностей готовых agent frameworks пока реализуется самостоятельно.
 
-- дорогая модель выполняет дешёвую работу;
-- большой входной контекст;
-- ограниченная автоматизация.
+## Связанные документы
 
-**Решение:** не использовать.
+- [ADR-0002: Workspace isolation и sandbox](0002-workspace-isolation-and-sandbox.md)
+- [Orchestrator design](../design/orchestrator.md)
+- [RFC-0001](../rfc/0001-mvp-implementation.md) — historical/superseded implementation proposal.
 
-### Только локальные модели
+## References
 
-Плюсы:
-
-- низкая стоимость;
-- полный контроль.
-
-Минусы:
-
-- недостаточная надёжность для части сложных задач.
-
-**Решение:** использовать как Tier 1, но не как единственный backend.
-
-## 18. Последствия
-
-### Положительные
-
-- предсказуемый расход Codex;
-- отсутствие рекурсивного создания дорогих агентов;
-- большая часть работы выполняется локально;
-- меньший контекст Codex;
-- возможность параллельных локальных исследований;
-- независимость ролей от конкретного LLM provider;
-- наблюдаемость;
-- возможность жёстких лимитов;
-- воспроизводимый workflow.
-
-### Отрицательные
-
-- требуется собственный orchestrator;
-- необходимо поддерживать prompts и routing;
-- требуется хранение состояния workflow;
-- появляется логика эскалации;
-- потребуется поддерживать интеграции с несколькими LLM backend.
-
-## 19. Ограничения первой версии
-
-В MVP не поддерживаются:
-
-- рекурсивные агенты;
-- динамическое создание типов агентов;
-- более одного одновременного Codex worker;
-- автоматический merge в main;
-- самостоятельный push;
-- автоматическое создание PR;
-- неограниченные retry-loop.
-
-## 20. MVP
-
-Первый workflow:
-
-```text
-Task
- ↓
-Planner
- ↓
-Explorer
- ↓
-TaskPacket
- ↓
-Codex Implementer
- ↓
-dotnet test
- ↓
-Local Review
-```
-
-Минимальные компоненты:
-
-```text
-AgentOrchestrator
-OllamaProvider
-CodexProvider
-GitTool
-SearchTool
-DotnetTool
-PlannerAgent
-ExplorerAgent
-ImplementerAgent
-ReviewAgent
-```
-
-Начальная конфигурация:
-
-```json
-{
-  "Agents": {
-    "MaxConcurrentCodexRuns": 1,
-    "MaxCodexRunsPerTask": 2,
-    "MaxRetries": 1
-  }
-}
-```
-
-## 21. Следующие этапы
-
-После MVP могут быть добавлены:
-
-- git worktree isolation;
-- persistent task state;
-- task queue;
-- parallel explorers;
-- web UI;
-- GitHub integration;
-- PR creation/review;
-- cost accounting;
-- automatic model routing.
-
-## 22. Итог
-
-TaskForge использует собственный .NET orchestrator.
-
-Мультиагентность реализуется внутри TaskForge, а не через рекурсивных Codex agents.
-
-Основная модель исполнения:
-
-```text
-Tools → Ollama → Codex
-```
-
-Для одной задачи по умолчанию допускается:
-
-```text
-1 основной Codex run
-+
-1 corrective Codex run
-```
-
-Поиск, анализ, подготовка контекста, тестирование и первичная диагностика по возможности выполняются локально.
+- Microsoft.Extensions.AI: https://learn.microsoft.com/dotnet/core/extensions/artificial-intelligence
+- Microsoft Agent Framework: https://learn.microsoft.com/agent-framework/
+- Agent Framework workflows: https://learn.microsoft.com/agent-framework/concepts/workflows/
+- Aider repository map: https://aider.chat/docs/repomap.html
