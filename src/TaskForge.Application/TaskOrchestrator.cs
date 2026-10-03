@@ -233,6 +233,12 @@ public sealed class TaskOrchestrator(
                 $"Base commit '{taskPacket.BaseCommit}' is no longer available in the repository.");
         }
 
+        if (taskPacket.WriteScope.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Run {taskId} has an empty write scope and cannot be safely applied.");
+        }
+
         WorkspaceHandle? workspace = null;
 
         try
@@ -276,6 +282,18 @@ public sealed class TaskOrchestrator(
                     WorkflowState.Failed,
                     "Codex implementation process failed.",
                     cancellationToken);
+            }
+
+            var implementationPolicyResult =
+                await ValidateWriteScopeAsync(
+                    metadata,
+                    taskPacket,
+                    workspace,
+                    cancellationToken);
+
+            if (implementationPolicyResult is not null)
+            {
+                return implementationPolicyResult;
             }
 
             while (true)
@@ -463,6 +481,18 @@ public sealed class TaskOrchestrator(
                         "Corrective Codex process failed.",
                         cancellationToken);
                 }
+
+                var correctionPolicyResult =
+                    await ValidateWriteScopeAsync(
+                        metadata,
+                        taskPacket,
+                        workspace,
+                        cancellationToken);
+
+                if (correctionPolicyResult is not null)
+                {
+                    return correctionPolicyResult;
+                }
             }
         }
         catch (CodexBudgetExceededException exception)
@@ -581,6 +611,51 @@ public sealed class TaskOrchestrator(
         return new CodexExecution(
             metadata,
             result);
+    }
+
+    private async Task<TaskRunResult?> ValidateWriteScopeAsync(
+        RunMetadata metadata,
+        TaskPacket taskPacket,
+        WorkspaceHandle workspace,
+        CancellationToken cancellationToken)
+    {
+        var snapshot =
+            await _workspaceManager.SnapshotAsync(
+                workspace,
+                cancellationToken);
+
+        await SaveWorkspaceSnapshotAsync(
+            metadata.Id,
+            $"workspace-worker-{metadata.CodexRuns:00}",
+            snapshot,
+            cancellationToken);
+
+        var violations =
+            WriteScopePolicy.FindViolations(
+                snapshot.ChangedFiles,
+                taskPacket.WriteScope);
+
+        if (violations.Count == 0)
+        {
+            return null;
+        }
+
+        await _runStore.SaveArtifactAsync(
+            metadata.Id,
+            $"write-scope-violation-{metadata.CodexRuns:00}.json",
+            new
+            {
+                Allowed = taskPacket.WriteScope,
+                Violations = violations
+            },
+            cancellationToken);
+
+        return await FinishResultAsync(
+            metadata,
+            WorkflowState.NeedsUser,
+            "Coding worker changed files outside the allowed write scope: "
+            + string.Join(", ", violations),
+            cancellationToken);
     }
 
     private async Task FinalizeWorkspaceAsync(

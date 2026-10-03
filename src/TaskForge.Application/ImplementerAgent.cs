@@ -46,6 +46,8 @@ public sealed class ImplementerAgent(
         builder.AppendLine(
             "- Keep changes limited to the requested task.");
         builder.AppendLine(
+            "- Do not modify files outside the supplied write scope.");
+        builder.AppendLine(
             "- Do not modify TaskForge orchestration or budget rules unless the task explicitly asks for it.");
         builder.AppendLine();
 
@@ -69,6 +71,11 @@ public sealed class ImplementerAgent(
             builder,
             "Relevant files",
             taskPacket.RelevantFiles);
+
+        AppendSection(
+            builder,
+            "Allowed write scope",
+            taskPacket.WriteScope);
 
         AppendSection(
             builder,

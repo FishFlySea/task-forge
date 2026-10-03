@@ -30,6 +30,9 @@ public static class TaskPacketFactory
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct()
                 .ToArray(),
+            WriteScope = WriteScopePolicy.Derive(
+                exploration.RelevantFiles,
+                exploration.TestTargets),
             TestTargets = exploration.TestTargets
                 .Distinct()
                 .ToArray()

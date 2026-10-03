@@ -54,6 +54,7 @@ public sealed class RunInspector(
         var canApply =
             !string.IsNullOrWhiteSpace(
                 taskPacket?.BaseCommit)
+            && taskPacket.WriteScope.Count > 0
             && metadata.State
                 is WorkflowState.ReadyToApply
                 or WorkflowState.PacketReady
@@ -108,11 +109,20 @@ public sealed class RunInspector(
             warnings.Add(
                 "task-packet.json is missing.");
         }
-        else if (string.IsNullOrWhiteSpace(
-                     taskPacket.BaseCommit))
+        else
         {
-            warnings.Add(
-                "TaskPacket has no base commit and cannot be safely applied.");
+            if (string.IsNullOrWhiteSpace(
+                    taskPacket.BaseCommit))
+            {
+                warnings.Add(
+                    "TaskPacket has no base commit and cannot be safely applied.");
+            }
+
+            if (taskPacket.WriteScope.Count == 0)
+            {
+                warnings.Add(
+                    "TaskPacket has an empty write scope and cannot be safely applied.");
+            }
         }
 
         if (!Directory.Exists(
