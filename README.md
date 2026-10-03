@@ -47,9 +47,14 @@ selected context matches that commit. Codex, authoritative build/test, diagnosti
 and review operate in the isolated worktree; final workspace status/diff is persisted
 before cleanup.
 
-The architecture review still has additional hardening gaps: full TaskPacket policy
-fields/context spans, unified run-budget semantics, write-scope validation, explicit
-network/approval policy, and a common host sandbox boundary for build/test.
+TaskPacket now also carries a deterministic write scope derived from selected source
+areas and test projects. After every Codex coding run, TaskForge snapshots changed
+files before build/test and rejects out-of-scope writes as `NeedsUser`; policy
+violations never receive an automatic corrective Codex run.
+
+The architecture review still has additional hardening gaps: full TaskPacket context
+spans/command policy/budgets, unified run-budget semantics, explicit network/approval
+policy, and a common host sandbox boundary for build/test.
 
 **Until ADR-0002 is fully implemented, run TaskForge only against repositories
 you trust.** A git worktree alone will not be treated as a host security boundary.
@@ -109,8 +114,8 @@ dotnet run --project src/TaskForge.Cli -- inspect <run-id>
 
 `show` displays run metadata and Codex usage. `inspect` is a zero-model-cost
 preflight view: it reads the saved request, plan, exploration result and TaskPacket,
-shows acceptance criteria, relevant files, observations and test targets, and reports
-whether the run is currently safe to pass to `apply`.
+shows acceptance criteria, relevant files, observations, write scope and test targets,
+and reports whether the run is currently safe to pass to `apply`.
 
 Set `TASKFORGE_RUNS_DIRECTORY` to override the local run storage directory.
 

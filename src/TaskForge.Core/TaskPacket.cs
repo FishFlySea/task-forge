@@ -16,6 +16,8 @@ public sealed record TaskPacket
 
     public required IReadOnlyList<string> Observations { get; init; }
 
+    public IReadOnlyList<string> WriteScope { get; init; } = [];
+
     public required IReadOnlyList<TestTarget> TestTargets { get; init; }
 
     public string? Diagnostics { get; init; }

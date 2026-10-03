@@ -12,12 +12,14 @@ public sealed class WorkflowStateMachineTests
     [InlineData(WorkflowState.Exploring, WorkflowState.PacketReady)]
     [InlineData(WorkflowState.PacketReady, WorkflowState.Implementing)]
     [InlineData(WorkflowState.Implementing, WorkflowState.Building)]
+    [InlineData(WorkflowState.Implementing, WorkflowState.NeedsUser)]
     [InlineData(WorkflowState.Building, WorkflowState.Testing)]
     [InlineData(WorkflowState.Testing, WorkflowState.Reviewing)]
     [InlineData(WorkflowState.Reviewing, WorkflowState.Completed)]
     [InlineData(WorkflowState.Testing, WorkflowState.Diagnosing)]
     [InlineData(WorkflowState.Diagnosing, WorkflowState.Correcting)]
     [InlineData(WorkflowState.Correcting, WorkflowState.Building)]
+    [InlineData(WorkflowState.Correcting, WorkflowState.NeedsUser)]
     public void Expected_transitions_are_allowed(
         WorkflowState from,
         WorkflowState to)

@@ -479,6 +479,11 @@ internal static class Program
             ?? inspection.Exploration?.Observations
             ?? []);
 
+        PrintItems(
+            "Write scope",
+            inspection.TaskPacket?.WriteScope
+            ?? []);
+
         var testTargets =
             inspection.TaskPacket?.TestTargets
             ?? inspection.Exploration?.TestTargets

@@ -39,6 +39,7 @@ public static class WorkflowStateMachine
 
             WorkflowState.Implementing =>
                 to is WorkflowState.Building
+                    or WorkflowState.NeedsUser
                     or WorkflowState.BudgetExceeded
                     or WorkflowState.Cancelled
                     or WorkflowState.Failed,
@@ -64,6 +65,7 @@ public static class WorkflowStateMachine
 
             WorkflowState.Correcting =>
                 to is WorkflowState.Building
+                    or WorkflowState.NeedsUser
                     or WorkflowState.BudgetExceeded
                     or WorkflowState.Cancelled
                     or WorkflowState.Failed,
