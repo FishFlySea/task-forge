@@ -51,6 +51,23 @@ public sealed class WriteScopePolicyTests
             violations);
     }
 
+    [Theory]
+    [InlineData("/etc/passwd")]
+    [InlineData("\\server\\share\\file.txt")]
+    [InlineData("C:\\Windows\\file.txt")]
+    public void FindViolations_rejects_cross_platform_absolute_paths(
+        string path)
+    {
+        var violations =
+            WriteScopePolicy.FindViolations(
+                [path],
+                ["src/**"]);
+
+        Assert.Equal(
+            [path],
+            violations);
+    }
+
     [Fact]
     public void FindViolations_rejects_out_of_scope_and_traversal_paths()
     {

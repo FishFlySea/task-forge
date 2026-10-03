@@ -190,7 +190,7 @@ public static class WriteScopePolicy
     {
         if (string.IsNullOrWhiteSpace(
                 path)
-            || Path.IsPathRooted(
+            || IsAbsoluteOnAnySupportedPlatform(
                 path))
         {
             return null;
@@ -219,6 +219,31 @@ public static class WriteScopePolicy
         return string.Join(
             '/',
             segments);
+    }
+
+    private static bool IsAbsoluteOnAnySupportedPlatform(
+        string path)
+    {
+        var value =
+            path.Trim();
+
+        if (Path.IsPathRooted(
+                value)
+            || value.StartsWith(
+                "/",
+                StringComparison.Ordinal)
+            || value.StartsWith(
+                "\\",
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return value.Length >= 3
+               && char.IsAsciiLetter(
+                   value[0])
+               && value[1] == ':'
+               && value[2] is '/' or '\\';
     }
 
     private static bool Matches(
