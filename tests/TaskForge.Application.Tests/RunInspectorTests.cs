@@ -44,17 +44,13 @@ public sealed class RunInspectorTests
                         [
                             "Bug is in Bug.cs"
                         ],
-                        WriteScope =
-                        [
-                            "src/**"
-                        ],
                         TestTargets = [],
                         Confidence = 0.9
                     },
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 2,
+                        SchemaVersion = 1,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         Goal = "Fix the bug",
                         Constraints = [],
@@ -134,10 +130,6 @@ public sealed class RunInspectorTests
                             "src/Bug.cs"
                         ],
                         Observations = [],
-                        WriteScope =
-                        [
-                            "src/**"
-                        ],
                         TestTargets = [],
                         Confidence = 0.8
                     }
@@ -184,7 +176,7 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 2,
+                        SchemaVersion = 1,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         Goal = "Fix the bug",
                         Constraints = [],
