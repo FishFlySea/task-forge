@@ -10,6 +10,7 @@ public sealed class TaskOrchestrator(
     ICodexRunGate codexRunGate,
     IDotnetRunner dotnetRunner,
     IGitClient gitClient,
+    IWorkspaceManager workspaceManager,
     IDiagnosticAgent diagnosticAgent,
     IReviewAgent reviewAgent,
     TimeProvider timeProvider)
@@ -21,6 +22,7 @@ public sealed class TaskOrchestrator(
     private readonly ICodexRunGate _codexRunGate = codexRunGate;
     private readonly IDotnetRunner _dotnetRunner = dotnetRunner;
     private readonly IGitClient _gitClient = gitClient;
+    private readonly IWorkspaceManager _workspaceManager = workspaceManager;
     private readonly IDiagnosticAgent _diagnosticAgent = diagnosticAgent;
     private readonly IReviewAgent _reviewAgent = reviewAgent;
     private readonly TimeProvider _timeProvider = timeProvider;
@@ -65,6 +67,19 @@ public sealed class TaskOrchestrator(
 
         try
         {
+            if (!await _gitClient.IsWorkingTreeCleanAsync(
+                    request.RepositoryPath,
+                    cancellationToken))
+            {
+                throw new InvalidOperationException(
+                    "Planning requires a clean Git working tree so TaskPacket context matches its base commit.");
+            }
+
+            var baseCommit =
+                await _gitClient.GetHeadCommitAsync(
+                    request.RepositoryPath,
+                    cancellationToken);
+
             metadata = await TransitionAsync(
                 metadata,
                 WorkflowState.Planning,
@@ -100,7 +115,8 @@ public sealed class TaskOrchestrator(
             var taskPacket = TaskPacketFactory.Create(
                 request,
                 plan,
-                exploration);
+                exploration,
+                baseCommit);
 
             await _runStore.SaveArtifactAsync(
                 metadata.Id,
@@ -201,8 +217,39 @@ public sealed class TaskOrchestrator(
                 "Stored request repository does not match run metadata.");
         }
 
+        if (string.IsNullOrWhiteSpace(
+                taskPacket.BaseCommit))
+        {
+            throw new InvalidOperationException(
+                $"Run {taskId} does not contain a base Git commit and cannot be safely applied.");
+        }
+
+        if (!await _gitClient.CommitExistsAsync(
+                request.RepositoryPath,
+                taskPacket.BaseCommit,
+                cancellationToken))
+        {
+            throw new InvalidOperationException(
+                $"Base commit '{taskPacket.BaseCommit}' is no longer available in the repository.");
+        }
+
+        WorkspaceHandle? workspace = null;
+
         try
         {
+            workspace =
+                await _workspaceManager.CreateAsync(
+                    request.RepositoryPath,
+                    taskPacket.BaseCommit,
+                    taskId,
+                    cancellationToken);
+
+            await _runStore.SaveArtifactAsync(
+                taskId,
+                "workspace.json",
+                workspace,
+                cancellationToken);
+
             metadata = await TransitionAsync(
                 metadata with
                 {
@@ -216,6 +263,7 @@ public sealed class TaskOrchestrator(
                 await ExecuteCodexAsync(
                     metadata,
                     taskPacket,
+                    workspace.Path,
                     CodexRunKind.Implementation,
                     cancellationToken);
 
@@ -239,7 +287,7 @@ public sealed class TaskOrchestrator(
 
                 var buildResult =
                     await _dotnetRunner.BuildAsync(
-                        request.RepositoryPath,
+                        workspace.Path,
                         cancellationToken);
 
                 await SaveProcessResultAsync(
@@ -260,7 +308,7 @@ public sealed class TaskOrchestrator(
 
                     testResult =
                         await _dotnetRunner.TestAsync(
-                            request.RepositoryPath,
+                            workspace.Path,
                             taskPacket.TestTargets,
                             cancellationToken);
 
@@ -288,20 +336,21 @@ public sealed class TaskOrchestrator(
                         cancellationToken);
 
                     var snapshot =
-                        await _gitClient.GetWorkingTreeSnapshotAsync(
-                            request.RepositoryPath,
+                        await _workspaceManager.SnapshotAsync(
+                            workspace,
                             cancellationToken);
 
-                    await _runStore.SaveTextArtifactAsync(
+                    await SaveWorkspaceSnapshotAsync(
                         metadata.Id,
-                        "git-working-tree.txt",
+                        "workspace-review",
                         snapshot,
                         cancellationToken);
 
                     var review =
                         await _reviewAgent.ReviewAsync(
                             taskPacket,
-                            snapshot,
+                            FormatWorkspaceSnapshot(
+                                snapshot),
                             buildResult,
                             testResult!,
                             cancellationToken);
@@ -333,15 +382,22 @@ public sealed class TaskOrchestrator(
                     cancellationToken);
 
                 var failedSnapshot =
-                    await _gitClient.GetWorkingTreeSnapshotAsync(
-                        request.RepositoryPath,
+                    await _workspaceManager.SnapshotAsync(
+                        workspace,
                         cancellationToken);
+
+                await SaveWorkspaceSnapshotAsync(
+                    metadata.Id,
+                    $"workspace-diagnostic-{metadata.CodexRuns:00}",
+                    failedSnapshot,
+                    cancellationToken);
 
                 var diagnosis =
                     await _diagnosticAgent.DiagnoseAsync(
                         taskPacket,
                         failure,
-                        failedSnapshot,
+                        FormatWorkspaceSnapshot(
+                            failedSnapshot),
                         cancellationToken);
 
                 await _runStore.SaveArtifactAsync(
@@ -384,6 +440,7 @@ public sealed class TaskOrchestrator(
                     correction = await ExecuteCodexAsync(
                         metadata,
                         correctivePacket,
+                        workspace.Path,
                         CodexRunKind.Correction,
                         cancellationToken);
                 }
@@ -443,11 +500,21 @@ public sealed class TaskOrchestrator(
 
             throw;
         }
+        finally
+        {
+            if (workspace is not null)
+            {
+                await FinalizeWorkspaceAsync(
+                    metadata.Id,
+                    workspace);
+            }
+        }
     }
 
     private async Task<CodexExecution> ExecuteCodexAsync(
         RunMetadata metadata,
         TaskPacket taskPacket,
+        string workspacePath,
         CodexRunKind kind,
         CancellationToken cancellationToken)
     {
@@ -472,7 +539,7 @@ public sealed class TaskOrchestrator(
         var result =
             await _implementerAgent.ExecuteAsync(
                 taskPacket,
-                metadata.RepositoryPath,
+                workspacePath,
                 kind,
                 cancellationToken);
 
@@ -515,6 +582,77 @@ public sealed class TaskOrchestrator(
             metadata,
             result);
     }
+
+    private async Task FinalizeWorkspaceAsync(
+        TaskId taskId,
+        WorkspaceHandle workspace)
+    {
+        try
+        {
+            var snapshot =
+                await _workspaceManager.SnapshotAsync(
+                    workspace,
+                    CancellationToken.None);
+
+            await SaveWorkspaceSnapshotAsync(
+                taskId,
+                "workspace-final",
+                snapshot,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            await _runStore.SaveTextArtifactAsync(
+                taskId,
+                "workspace-snapshot-error.log",
+                exception.ToString(),
+                CancellationToken.None);
+        }
+
+        try
+        {
+            await _workspaceManager.CleanupAsync(
+                workspace,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            await _runStore.SaveTextArtifactAsync(
+                taskId,
+                "workspace-cleanup-error.log",
+                exception.ToString(),
+                CancellationToken.None);
+        }
+    }
+
+    private async Task SaveWorkspaceSnapshotAsync(
+        TaskId taskId,
+        string prefix,
+        WorkspaceSnapshot snapshot,
+        CancellationToken cancellationToken)
+    {
+        await _runStore.SaveArtifactAsync(
+            taskId,
+            $"{prefix}.json",
+            snapshot,
+            cancellationToken);
+
+        await _runStore.SaveTextArtifactAsync(
+            taskId,
+            $"{prefix}.diff",
+            snapshot.Diff,
+            cancellationToken);
+    }
+
+    private static string FormatWorkspaceSnapshot(
+        WorkspaceSnapshot snapshot) =>
+        "## git status"
+        + Environment.NewLine
+        + snapshot.Status
+        + Environment.NewLine
+        + "## git diff"
+        + Environment.NewLine
+        + snapshot.Diff;
 
     private async Task SaveProcessResultAsync(
         TaskId id,

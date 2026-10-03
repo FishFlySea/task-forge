@@ -2,6 +2,10 @@ namespace TaskForge.Core;
 
 public sealed record TaskPacket
 {
+    public int SchemaVersion { get; init; } = 1;
+
+    public string? BaseCommit { get; init; }
+
     public required string Goal { get; init; }
 
     public required IReadOnlyList<string> Constraints { get; init; }

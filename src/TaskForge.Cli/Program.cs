@@ -270,6 +270,10 @@ internal static class Program
                             ?? "dotnet"
                     }),
                 new GitClient(),
+                new GitWorktreeManager(
+                    Environment.GetEnvironmentVariable(
+                        "TASKFORGE_WORKTREES_DIRECTORY")
+                    ?? GitWorktreeManager.GetDefaultWorktreesDirectory()),
                 new DiagnosticAgent(
                     localLlm),
                 new ReviewAgent(

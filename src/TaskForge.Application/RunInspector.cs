@@ -52,7 +52,9 @@ public sealed class RunInspector(
                 taskPacket);
 
         var canApply =
-            metadata.State
+            !string.IsNullOrWhiteSpace(
+                taskPacket?.BaseCommit)
+            && metadata.State
                 is WorkflowState.ReadyToApply
                 or WorkflowState.PacketReady
             && metadata.CodexRuns == 0
@@ -105,6 +107,12 @@ public sealed class RunInspector(
         {
             warnings.Add(
                 "task-packet.json is missing.");
+        }
+        else if (string.IsNullOrWhiteSpace(
+                     taskPacket.BaseCommit))
+        {
+            warnings.Add(
+                "TaskPacket has no base commit and cannot be safely applied.");
         }
 
         if (!Directory.Exists(
