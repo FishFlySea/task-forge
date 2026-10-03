@@ -24,13 +24,17 @@ public sealed class TaskOrchestratorTests
             new CodexRunGate(
                 new AgentBudgetOptions());
 
+        var workspaceManager =
+            new FakeWorkspaceManager();
+
         var orchestrator =
             CreateOrchestrator(
                 store,
                 planner,
                 explorer,
                 implementer,
-                gate);
+                gate,
+                workspaceManager);
 
         var request =
             new TaskRequest(
@@ -86,6 +90,18 @@ public sealed class TaskOrchestratorTests
         Assert.Equal(
             1,
             store.LastMetadata?.CodexRuns);
+
+        Assert.Equal(
+            1,
+            workspaceManager.CreateCalls);
+
+        Assert.Equal(
+            1,
+            workspaceManager.CleanupCalls);
+
+        Assert.Equal(
+            workspaceManager.WorkspacePath,
+            implementer.LastWorkspace);
     }
 
     [Fact]
@@ -104,7 +120,8 @@ public sealed class TaskOrchestratorTests
                 new FakePlannerAgent(),
                 new FakeExplorerAgent(),
                 new FakeImplementerAgent(),
-                gate);
+                gate,
+                new FakeWorkspaceManager());
 
         var result =
             await orchestrator.RunAsync(
@@ -139,7 +156,8 @@ public sealed class TaskOrchestratorTests
         FakePlannerAgent planner,
         FakeExplorerAgent explorer,
         FakeImplementerAgent implementer,
-        CodexRunGate gate) =>
+        CodexRunGate gate,
+        FakeWorkspaceManager workspaceManager) =>
         new(
             store,
             planner,
@@ -148,6 +166,7 @@ public sealed class TaskOrchestratorTests
             gate,
             new FakeDotnetRunner(),
             new FakeGitClient(),
+            workspaceManager,
             new FakeDiagnosticAgent(),
             new FakeReviewAgent(),
             TimeProvider.System);
@@ -211,6 +230,8 @@ public sealed class TaskOrchestratorTests
     {
         public int Calls { get; private set; }
 
+        public string? LastWorkspace { get; private set; }
+
         public Task<CodexRunResult> ExecuteAsync(
             TaskPacket taskPacket,
             string workspace,
@@ -218,6 +239,7 @@ public sealed class TaskOrchestratorTests
             CancellationToken cancellationToken)
         {
             Calls++;
+            LastWorkspace = workspace;
 
             return Task.FromResult(
                 new CodexRunResult(
@@ -259,11 +281,79 @@ public sealed class TaskOrchestratorTests
     private sealed class FakeGitClient :
         IGitClient
     {
-        public Task<string> GetWorkingTreeSnapshotAsync(
-            string workspace,
+        private const string Head =
+            "0123456789abcdef0123456789abcdef01234567";
+
+        public Task<string> GetHeadCommitAsync(
+            string repositoryPath,
             CancellationToken cancellationToken) =>
             Task.FromResult(
-                "M src/Test.cs");
+                Head);
+
+        public Task<bool> IsWorkingTreeCleanAsync(
+            string repositoryPath,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                true);
+
+        public Task<bool> CommitExistsAsync(
+            string repositoryPath,
+            string commit,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                string.Equals(
+                    commit,
+                    Head,
+                    StringComparison.Ordinal));
+    }
+
+    private sealed class FakeWorkspaceManager :
+        IWorkspaceManager
+    {
+        public string WorkspacePath { get; } =
+            Directory.GetCurrentDirectory();
+
+        public int CreateCalls { get; private set; }
+
+        public int CleanupCalls { get; private set; }
+
+        public Task<WorkspaceHandle> CreateAsync(
+            string repositoryPath,
+            string baseCommit,
+            TaskId taskId,
+            CancellationToken cancellationToken)
+        {
+            CreateCalls++;
+
+            return Task.FromResult(
+                new WorkspaceHandle(
+                    repositoryPath,
+                    WorkspacePath,
+                    baseCommit));
+        }
+
+        public Task<WorkspaceSnapshot> SnapshotAsync(
+            WorkspaceHandle workspace,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new WorkspaceSnapshot
+                {
+                    ChangedFiles =
+                    [
+                        "src/Test.cs"
+                    ],
+                    UntrackedFiles = [],
+                    Status = " M src/Test.cs",
+                    Diff = "diff --git a/src/Test.cs b/src/Test.cs"
+                });
+
+        public Task CleanupAsync(
+            WorkspaceHandle workspace,
+            CancellationToken cancellationToken)
+        {
+            CleanupCalls++;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeDiagnosticAgent :

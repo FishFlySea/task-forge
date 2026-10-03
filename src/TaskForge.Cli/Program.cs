@@ -428,6 +428,8 @@ internal static class Program
         Console.WriteLine(
             $"Repository:     {metadata.RepositoryPath}");
         Console.WriteLine(
+            $"Base commit:    {inspection.TaskPacket?.BaseCommit ?? "-"}");
+        Console.WriteLine(
             $"Codex runs:     {metadata.CodexRuns}/2");
         Console.WriteLine(
             $"Ready to apply: {(inspection.CanApply ? "yes" : "no")}");
