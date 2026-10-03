@@ -105,6 +105,54 @@ public sealed class TaskOrchestratorTests
     }
 
     [Fact]
+    public async Task Write_scope_violation_stops_before_build()
+    {
+        var store =
+            new FakeRunStore();
+
+        var dotnetRunner =
+            new FakeDotnetRunner();
+
+        using var gate =
+            new CodexRunGate(
+                new AgentBudgetOptions());
+
+        var orchestrator =
+            CreateOrchestrator(
+                store,
+                new FakePlannerAgent(),
+                new FakeExplorerAgent(),
+                new FakeImplementerAgent(),
+                gate,
+                new FakeWorkspaceManager(
+                    ["README.md"]),
+                dotnetRunner);
+
+        var result =
+            await orchestrator.RunAsync(
+                new TaskRequest(
+                    "Implement planner",
+                    Directory.GetCurrentDirectory()),
+                CancellationToken.None);
+
+        Assert.Equal(
+            WorkflowState.NeedsUser,
+            result.State);
+
+        Assert.Equal(
+            0,
+            dotnetRunner.BuildCalls);
+
+        Assert.Contains(
+            "write-scope-violation-01.json",
+            store.JsonArtifacts);
+
+        Assert.Contains(
+            "README.md",
+            result.Message);
+    }
+
+    [Fact]
     public async Task Run_keeps_one_shot_behavior()
     {
         var store =
@@ -157,14 +205,15 @@ public sealed class TaskOrchestratorTests
         FakeExplorerAgent explorer,
         FakeImplementerAgent implementer,
         CodexRunGate gate,
-        FakeWorkspaceManager workspaceManager) =>
+        FakeWorkspaceManager workspaceManager,
+        FakeDotnetRunner? dotnetRunner = null) =>
         new(
             store,
             planner,
             explorer,
             implementer,
             gate,
-            new FakeDotnetRunner(),
+            dotnetRunner ?? new FakeDotnetRunner(),
             new FakeGitClient(),
             workspaceManager,
             new FakeDiagnosticAgent(),
@@ -258,24 +307,36 @@ public sealed class TaskOrchestratorTests
     private sealed class FakeDotnetRunner :
         IDotnetRunner
     {
+        public int BuildCalls { get; private set; }
+
+        public int TestCalls { get; private set; }
+
         public Task<ProcessResult> BuildAsync(
             string workspace,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
+            CancellationToken cancellationToken)
+        {
+            BuildCalls++;
+
+            return Task.FromResult(
                 new ProcessResult(
                     0,
                     "build ok",
                     string.Empty));
+        }
 
         public Task<ProcessResult> TestAsync(
             string workspace,
             IReadOnlyList<TestTarget> targets,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(
+            CancellationToken cancellationToken)
+        {
+            TestCalls++;
+
+            return Task.FromResult(
                 new ProcessResult(
                     0,
                     "tests ok",
                     string.Empty));
+        }
     }
 
     private sealed class FakeGitClient :
@@ -307,9 +368,14 @@ public sealed class TaskOrchestratorTests
                     StringComparison.Ordinal));
     }
 
-    private sealed class FakeWorkspaceManager :
+    private sealed class FakeWorkspaceManager(
+        IReadOnlyList<string>? changedFiles = null) :
         IWorkspaceManager
     {
+        private readonly IReadOnlyList<string> _changedFiles =
+            changedFiles
+            ?? ["src/TaskForge.Application/PlannerAgent.cs"];
+
         public string WorkspacePath { get; } =
             Directory.GetCurrentDirectory();
 
@@ -339,12 +405,18 @@ public sealed class TaskOrchestratorTests
                 new WorkspaceSnapshot
                 {
                     ChangedFiles =
-                    [
-                        "src/Test.cs"
-                    ],
+                        _changedFiles,
                     UntrackedFiles = [],
-                    Status = " M src/Test.cs",
-                    Diff = "diff --git a/src/Test.cs b/src/Test.cs"
+                    Status =
+                        string.Join(
+                            Environment.NewLine,
+                            _changedFiles.Select(
+                                x => $" M {x}")),
+                    Diff =
+                        string.Join(
+                            Environment.NewLine,
+                            _changedFiles.Select(
+                                x => $"diff --git a/{x} b/{x}"))
                 });
 
         public Task CleanupAsync(

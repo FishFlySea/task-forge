@@ -44,6 +44,10 @@ public sealed class RunInspectorTests
                         [
                             "Bug is in Bug.cs"
                         ],
+                        WriteScope =
+                        [
+                            "src/**"
+                        ],
                         TestTargets = [],
                         Confidence = 0.9
                     },
@@ -65,6 +69,10 @@ public sealed class RunInspectorTests
                         Observations =
                         [
                             "Bug is in Bug.cs"
+                        ],
+                        WriteScope =
+                        [
+                            "src/**"
                         ],
                         TestTargets = []
                     }
@@ -126,6 +134,10 @@ public sealed class RunInspectorTests
                             "src/Bug.cs"
                         ],
                         Observations = [],
+                        WriteScope =
+                        [
+                            "src/**"
+                        ],
                         TestTargets = [],
                         Confidence = 0.8
                     }
@@ -185,6 +197,10 @@ public sealed class RunInspectorTests
                             "src/Bug.cs"
                         ],
                         Observations = [],
+                        WriteScope =
+                        [
+                            "src/**"
+                        ],
                         TestTargets = []
                     }
             };
