@@ -161,12 +161,51 @@ public sealed partial class GitWorktreeManager(
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
+        var combinedDiff =
+            new System.Text.StringBuilder(
+                diff.StandardOutput);
+
+        foreach (var path in untrackedFiles)
+        {
+            var untrackedDiff =
+                await ExternalProcessRunner.RunAsync(
+                    "git",
+                    [
+                        "diff",
+                        "--no-index",
+                        "--no-color",
+                        "--",
+                        GetNullDevice(),
+                        path
+                    ],
+                    workspace.Path,
+                    _timeout,
+                    cancellationToken);
+
+            if (untrackedDiff.ExitCode is not 0 and not 1)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to capture untracked file diff for '{path}'."
+                    + Environment.NewLine
+                    + untrackedDiff.CombinedOutput);
+            }
+
+            if (combinedDiff.Length > 0
+                && combinedDiff[^1] != '\n')
+            {
+                combinedDiff.AppendLine();
+            }
+
+            combinedDiff.Append(
+                untrackedDiff.StandardOutput);
+        }
+
         return new WorkspaceSnapshot
         {
             ChangedFiles = changedFiles,
             UntrackedFiles = untrackedFiles,
             Status = status.StandardOutput,
-            Diff = diff.StandardOutput
+            Diff = combinedDiff.ToString()
         };
     }
 
@@ -204,6 +243,11 @@ public sealed partial class GitWorktreeManager(
             _timeout,
             cancellationToken);
     }
+
+    private static string GetNullDevice() =>
+        OperatingSystem.IsWindows()
+            ? "NUL"
+            : "/dev/null";
 
     internal static bool IsValidCommitId(
         string value) =>

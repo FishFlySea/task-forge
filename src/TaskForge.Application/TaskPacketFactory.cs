@@ -15,7 +15,7 @@ public static class TaskPacketFactory
 
         return new TaskPacket
         {
-            SchemaVersion = 2,
+            SchemaVersion = 1,
             BaseCommit = baseCommit,
             Goal = request.Goal,
             Constraints = [],

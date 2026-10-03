@@ -132,6 +132,14 @@ public sealed class GitWorktreeManagerTests : IDisposable
             "tracked.txt",
             snapshot.Diff);
 
+        Assert.Contains(
+            "new.txt",
+            snapshot.Diff);
+
+        Assert.Contains(
+            "new",
+            snapshot.Diff);
+
         await sut.CleanupAsync(
             workspace,
             CancellationToken.None);
