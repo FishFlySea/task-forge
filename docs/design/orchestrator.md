@@ -675,7 +675,7 @@ Routing policy меняется только после накопления eva
 
 ## 19. Current implementation gaps
 
-На 2026-10-02 код уже имеет:
+На 2026-10-03 код уже имеет:
 
 - deterministic state machine;
 - local Planner/Explorer/Diagnostic/Reviewer;
@@ -686,20 +686,23 @@ Routing policy меняется только после накопления eva
 - process-tree kill;
 - Codex JSONL usage parsing;
 - plan/apply split;
-- persistent run artifacts.
+- persistent run artifacts;
+- `baseCommit` pinning и clean-checkout planning preflight;
+- disposable detached git worktree lifecycle;
+- workspace snapshots с tracked/untracked diff;
+- deterministic TaskPacket `writeScope`;
+- post-worker write-scope validation до build/test.
 
 Для соответствия ADR остаются изменения:
 
-1. ввести `IWorkspaceManager` и git worktree lifecycle;
-2. добавить `baseCommit`, `schemaVersion`, `writeScope`, context spans, command policy и budgets в TaskPacket;
-3. заменить `MaxCodexRunsPerTask + MaxCodexRetries` на одну семантику `MaxCodexRuns`;
-4. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
-5. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
-6. добавить write-scope validation;
-7. сделать approval/network policy launch-time explicit;
-8. сохранить prompt/model/tool manifest;
-9. добавить metrics для context quality и terminal-state rates;
-10. изолировать build/test process boundary либо явно оставить trusted-repository limitation до реализации.
+1. завершить versioned TaskPacket: context spans, command policy и packet/run budgets;
+2. заменить `MaxCodexRunsPerTask + MaxCodexRetries` на одну семантику `MaxCodexRuns`;
+3. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
+4. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
+5. сделать approval/network policy launch-time explicit;
+6. сохранить prompt/model/tool manifest;
+7. добавить metrics для context quality и terminal-state rates;
+8. изолировать build/test process boundary либо явно оставить trusted-repository limitation до реализации.
 
 Эти gaps являются implementation backlog, а не альтернативными архитектурными вариантами.
 

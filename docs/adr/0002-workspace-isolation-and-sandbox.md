@@ -200,6 +200,19 @@ TaskForge прекращает автоматический workflow. Допол
 
 ## Implementation status
 
-На момент принятия ADR существующая MVP-реализация уже имеет Codex timeout, process-tree kill, workspace-write sandbox и explicit multi-agent disable, но ещё не реализует полный worktree lifecycle и единый sandbox для build/test.
+На 2026-10-03 реализованы:
 
-До закрытия этого gap README должен явно обозначать режим как предназначенный только для trusted repositories.
+- Codex timeout и process-tree kill;
+- workspace-write sandbox и explicit multi-agent disable;
+- фиксация `baseCommit` на planning;
+- clean-checkout preflight;
+- disposable detached git worktree для каждого apply;
+- выполнение Codex/build/test внутри worktree;
+- сохранение tracked/untracked workspace diff;
+- deterministic `writeScope` в TaskPacket;
+- post-worker write-scope validation до build/test;
+- остановка в `NeedsUser` без corrective run при выходе за write scope.
+
+Ещё не реализован полноценный общий process/container sandbox для Codex и build/test,
+а также explicit network/approval policy и command policy. Поэтому TaskForge по-прежнему
+должен использоваться только с trusted repositories.
