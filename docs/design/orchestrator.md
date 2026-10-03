@@ -27,10 +27,11 @@ Orchestrator должен:
 4. Correction может быть запрошен только после authoritative build/test failure и local Diagnostic step.
 5. Reviewer не запускает correction автоматически.
 6. Planner/Explorer/Diagnostic/Reviewer не имеют произвольного shell access.
-7. Build/test запускаются orchestrator и являются source of truth.
-8. Coding worker не пишет в основной checkout.
-9. TaskPacket versioned, validated и bounded.
-10. Ни один LLM loop не является неограниченным.
+7. Write-scope violation после coding worker немедленно завершает automation как `NeedsUser` и не выдаёт corrective run.
+8. Build/test запускаются orchestrator и являются source of truth.
+9. Coding worker не пишет в основной checkout.
+10. TaskPacket versioned, validated и bounded.
+11. Ни один LLM loop не является неограниченным.
 
 ## 3. Canonical state machine
 
