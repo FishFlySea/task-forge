@@ -50,6 +50,8 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
+                        SchemaVersion = 2,
+                        BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =
@@ -170,6 +172,8 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
+                        SchemaVersion = 2,
+                        BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =

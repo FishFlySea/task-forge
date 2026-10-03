@@ -1,4 +1,5 @@
 using TaskForge.Application;
+using TaskForge.Core;
 
 namespace TaskForge.Infrastructure;
 
@@ -8,38 +9,95 @@ public sealed class GitClient(
     private readonly TimeSpan _timeout =
         timeout ?? TimeSpan.FromMinutes(1);
 
-    public async Task<string> GetWorkingTreeSnapshotAsync(
-        string workspace,
+    public async Task<string> GetHeadCommitAsync(
+        string repositoryPath,
         CancellationToken cancellationToken)
     {
-        var status =
+        var result =
             await ExternalProcessRunner.RunAsync(
                 "git",
-                ["status", "--short"],
-                workspace,
+                ["rev-parse", "HEAD"],
+                repositoryPath,
                 _timeout,
                 cancellationToken);
 
-        var diff =
+        EnsureSuccess(
+            result,
+            "Unable to resolve repository HEAD.");
+
+        var commit =
+            result.StandardOutput.Trim();
+
+        if (!GitWorktreeManager.IsValidCommitId(
+                commit))
+        {
+            throw new InvalidOperationException(
+                $"Git returned an invalid HEAD commit: '{commit}'.");
+        }
+
+        return commit;
+    }
+
+    public async Task<bool> IsWorkingTreeCleanAsync(
+        string repositoryPath,
+        CancellationToken cancellationToken)
+    {
+        var result =
             await ExternalProcessRunner.RunAsync(
                 "git",
                 [
-                    "diff",
-                    "--no-ext-diff",
-                    "--unified=3",
-                    "--"
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=all"
                 ],
-                workspace,
+                repositoryPath,
                 _timeout,
                 cancellationToken);
 
-        return
-            "## git status --short"
-            + Environment.NewLine
-            + status.StandardOutput
-            + Environment.NewLine
-            + "## git diff"
-            + Environment.NewLine
-            + diff.StandardOutput;
+        EnsureSuccess(
+            result,
+            "Unable to inspect Git working tree.");
+
+        return string.IsNullOrWhiteSpace(
+            result.StandardOutput);
+    }
+
+    public async Task<bool> CommitExistsAsync(
+        string repositoryPath,
+        string commit,
+        CancellationToken cancellationToken)
+    {
+        if (!GitWorktreeManager.IsValidCommitId(
+                commit))
+        {
+            return false;
+        }
+
+        var result =
+            await ExternalProcessRunner.RunAsync(
+                "git",
+                [
+                    "cat-file",
+                    "-e",
+                    $"{commit}^{{commit}}"
+                ],
+                repositoryPath,
+                _timeout,
+                cancellationToken);
+
+        return result.Success;
+    }
+
+    private static void EnsureSuccess(
+        ProcessResult result,
+        string message)
+    {
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(
+                message
+                + Environment.NewLine
+                + result.CombinedOutput);
+        }
     }
 }

@@ -41,10 +41,15 @@ TaskForge launches Codex with the multi-agent feature explicitly disabled.
 Each Codex invocation has an external timeout and rollout/token budget, and JSONL
 usage is persisted when available.
 
-The architecture review identified additional hardening that is now normative in
-ADR-0001/0002 but is not fully implemented yet: disposable git worktrees,
-versioned TaskPacket policy fields, unified run-budget semantics, write-scope
-validation, and a common sandbox boundary for build/test.
+Apply runs now use disposable detached Git worktrees created from the exact
+`baseCommit` stored by `plan`. Planning requires a clean source checkout so the
+selected context matches that commit. Codex, authoritative build/test, diagnostics,
+and review operate in the isolated worktree; final workspace status/diff is persisted
+before cleanup.
+
+The architecture review still has additional hardening gaps: full TaskPacket policy
+fields/context spans, unified run-budget semantics, write-scope validation, explicit
+network/approval policy, and a common host sandbox boundary for build/test.
 
 **Until ADR-0002 is fully implemented, run TaskForge only against repositories
 you trust.** A git worktree alone will not be treated as a host security boundary.
@@ -68,6 +73,7 @@ TASKFORGE_CODEX_TIMEOUT_SECONDS=1200
 TASKFORGE_CODEX_IMPLEMENTATION_TOKEN_BUDGET=40000
 TASKFORGE_CODEX_CORRECTION_TOKEN_BUDGET=20000
 TASKFORGE_DOTNET_EXECUTABLE=dotnet
+TASKFORGE_WORKTREES_DIRECTORY=<OS local app data>/TaskForge/worktrees
 ~~~
 
 ## Usage
@@ -85,7 +91,8 @@ For quota-sensitive work, prepare the task without starting Codex:
 dotnet run --project src/TaskForge.Cli -- plan --repo ../some-repo "Fix the failing test"
 ~~~
 
-This performs Planner + Explorer locally, stores `task-packet.json`, and stops in
+This requires a clean Git working tree, records the exact HEAD as `baseCommit`,
+performs Planner + Explorer locally, stores `task-packet.json`, and stops in
 `ReadyToApply` with `CodexRuns = 0`. Apply that exact saved packet later:
 
 ~~~bash

@@ -270,6 +270,10 @@ internal static class Program
                             ?? "dotnet"
                     }),
                 new GitClient(),
+                new GitWorktreeManager(
+                    Environment.GetEnvironmentVariable(
+                        "TASKFORGE_WORKTREES_DIRECTORY")
+                    ?? GitWorktreeManager.GetDefaultWorktreesDirectory()),
                 new DiagnosticAgent(
                     localLlm),
                 new ReviewAgent(
@@ -423,6 +427,8 @@ internal static class Program
             $"State:          {metadata.State}");
         Console.WriteLine(
             $"Repository:     {metadata.RepositoryPath}");
+        Console.WriteLine(
+            $"Base commit:    {inspection.TaskPacket?.BaseCommit ?? "-"}");
         Console.WriteLine(
             $"Codex runs:     {metadata.CodexRuns}/2");
         Console.WriteLine(

@@ -7,9 +7,16 @@ public static class TaskPacketFactory
     public static TaskPacket Create(
         TaskRequest request,
         PlanResult plan,
-        ExplorationResult exploration) =>
-        new()
+        ExplorationResult exploration,
+        string baseCommit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            baseCommit);
+
+        return new TaskPacket
         {
+            SchemaVersion = 1,
+            BaseCommit = baseCommit,
             Goal = request.Goal,
             Constraints = [],
             AcceptanceCriteria = plan.AcceptanceCriteria
@@ -27,4 +34,5 @@ public static class TaskPacketFactory
                 .Distinct()
                 .ToArray()
         };
+    }
 }
