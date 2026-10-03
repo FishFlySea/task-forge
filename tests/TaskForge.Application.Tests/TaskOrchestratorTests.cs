@@ -22,7 +22,7 @@ public sealed class TaskOrchestratorTests
 
         using var gate =
             new CodexRunGate(
-                new AgentBudgetOptions());
+                new CodexBudgetOptions());
 
         var workspaceManager =
             new FakeWorkspaceManager();
@@ -115,7 +115,7 @@ public sealed class TaskOrchestratorTests
 
         using var gate =
             new CodexRunGate(
-                new AgentBudgetOptions());
+                new CodexBudgetOptions());
 
         var orchestrator =
             CreateOrchestrator(
@@ -160,7 +160,7 @@ public sealed class TaskOrchestratorTests
 
         using var gate =
             new CodexRunGate(
-                new AgentBudgetOptions());
+                new CodexBudgetOptions());
 
         var orchestrator =
             CreateOrchestrator(

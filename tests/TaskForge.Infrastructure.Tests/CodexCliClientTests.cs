@@ -6,6 +6,19 @@ namespace TaskForge.Infrastructure.Tests;
 
 public sealed class CodexCliClientTests
 {
+    [Fact]
+    public void Client_uses_shared_budget_validation()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new CodexCliClient(
+                new CodexCliOptions(),
+                new CodexBudgetOptions
+                {
+                    RunTimeout = TimeSpan.Zero
+                }));
+    }
+
+
     [Theory]
     [InlineData(CodexRunKind.Implementation, 40000)]
     [InlineData(CodexRunKind.Correction, 20000)]
