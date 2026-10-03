@@ -3,14 +3,27 @@ using TaskForge.Core;
 
 namespace TaskForge.Infrastructure;
 
-public sealed class CodexCliClient(
-    CodexCliOptions options) : ICodexClient
+public sealed class CodexCliClient : ICodexClient
 {
-    private readonly CodexCliOptions _options =
-        Validate(
-            options
-            ?? throw new ArgumentNullException(
-                nameof(options)));
+    private readonly CodexCliOptions _options;
+    private readonly CodexBudgetOptions _budget;
+
+    public CodexCliClient(
+        CodexCliOptions options,
+        CodexBudgetOptions budget)
+    {
+        _options =
+            ValidateOptions(
+                options
+                ?? throw new ArgumentNullException(
+                    nameof(options)));
+
+        _budget =
+            ValidateBudget(
+                budget
+                ?? throw new ArgumentNullException(
+                    nameof(budget)));
+    }
 
     public async Task<CodexRunResult> ExecuteAsync(
         CodexRunRequest request,
@@ -24,19 +37,20 @@ public sealed class CodexCliClient(
 
         var tokenBudget =
             request.Kind == CodexRunKind.Implementation
-                ? _options.ImplementationTokenBudget
-                : _options.CorrectionTokenBudget;
+                ? _budget.ImplementationTokenBudget
+                : _budget.CorrectionTokenBudget;
 
-        var arguments = BuildArguments(
-            request,
-            tokenBudget);
+        var arguments =
+            BuildArguments(
+                request,
+                tokenBudget);
 
         var result =
             await ExternalProcessRunner.RunAsync(
                 _options.Executable,
                 arguments,
                 request.Workspace,
-                _options.Timeout,
+                _budget.RunTimeout,
                 cancellationToken);
 
         return new CodexRunResult(
@@ -65,33 +79,39 @@ public sealed class CodexCliClient(
             request.Prompt
         ];
 
-    private static CodexCliOptions Validate(
+    private static CodexCliOptions ValidateOptions(
         CodexCliOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(
             options.Executable);
 
-        if (options.Timeout <= TimeSpan.Zero)
+        return options;
+    }
+
+    private static CodexBudgetOptions ValidateBudget(
+        CodexBudgetOptions budget)
+    {
+        if (budget.RunTimeout <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(options),
-                "Codex timeout must be positive.");
+                nameof(budget),
+                "Codex run timeout must be positive.");
         }
 
-        if (options.ImplementationTokenBudget <= 0)
+        if (budget.ImplementationTokenBudget <= 0)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(options),
+                nameof(budget),
                 "Implementation token budget must be positive.");
         }
 
-        if (options.CorrectionTokenBudget <= 0)
+        if (budget.CorrectionTokenBudget <= 0)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(options),
+                nameof(budget),
                 "Correction token budget must be positive.");
         }
 
-        return options;
+        return budget;
     }
 }

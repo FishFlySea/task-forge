@@ -691,18 +691,18 @@ Routing policy меняется только после накопления eva
 - disposable detached git worktree lifecycle;
 - workspace snapshots с tracked/untracked diff;
 - deterministic TaskPacket `writeScope`;
-- post-worker write-scope validation до build/test.
+- post-worker write-scope validation до build/test;
+- единый `CodexBudgetOptions` для max-runs, concurrency, timeout и per-kind token budgets без отдельного retry limit.
 
 Для соответствия ADR остаются изменения:
 
 1. завершить versioned TaskPacket: context spans, command policy и packet/run budgets;
-2. заменить `MaxCodexRunsPerTask + MaxCodexRetries` на одну семантику `MaxCodexRuns`;
-3. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
-4. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
-5. сделать approval/network policy launch-time explicit;
-6. сохранить prompt/model/tool manifest;
-7. добавить metrics для context quality и terminal-state rates;
-8. изолировать build/test process boundary либо явно оставить trusted-repository limitation до реализации.
+2. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
+3. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
+4. сделать approval/network policy launch-time explicit;
+5. сохранить prompt/model/tool manifest;
+6. добавить metrics для context quality и terminal-state rates;
+7. изолировать build/test process boundary либо явно оставить trusted-repository limitation до реализации.
 
 Эти gaps являются implementation backlog, а не альтернативными архитектурными вариантами.
 

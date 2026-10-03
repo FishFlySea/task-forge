@@ -4,26 +4,19 @@ namespace TaskForge.Application;
 
 public sealed class CodexRunGate : ICodexRunGate, IDisposable
 {
-    private readonly AgentBudgetOptions _options;
+    private readonly CodexBudgetOptions _options;
     private readonly SemaphoreSlim _semaphore;
 
     public CodexRunGate(
-        AgentBudgetOptions options)
+        CodexBudgetOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        if (options.MaxCodexRunsPerTask <= 0)
+        if (options.MaxCodexRuns <= 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(options),
-                "MaxCodexRunsPerTask must be positive.");
-        }
-
-        if (options.MaxCodexRetries < 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(options),
-                "MaxCodexRetries cannot be negative.");
+                "MaxCodexRuns must be positive.");
         }
 
         if (options.MaxConcurrentCodexRuns <= 0)
@@ -45,42 +38,38 @@ public sealed class CodexRunGate : ICodexRunGate, IDisposable
         CodexRunKind kind,
         CancellationToken cancellationToken)
     {
-        if (currentRuns >= _options.MaxCodexRunsPerTask)
+        if (currentRuns < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(currentRuns));
+        }
+
+        if (currentRuns >= _options.MaxCodexRuns)
         {
             throw new CodexBudgetExceededException(
                 $"Task {taskId} has exhausted its Codex run budget "
-                + $"({_options.MaxCodexRunsPerTask}).");
+                + $"({_options.MaxCodexRuns}).");
         }
 
         if (kind == CodexRunKind.Implementation
             && currentRuns != 0)
         {
             throw new CodexBudgetExceededException(
-                $"Task {taskId} may have only one implementation Codex run.");
+                $"Task {taskId} may start Implementation only as its first Codex run.");
         }
 
-        if (kind == CodexRunKind.Correction)
+        if (kind == CodexRunKind.Correction
+            && currentRuns == 0)
         {
-            if (currentRuns == 0)
-            {
-                throw new InvalidOperationException(
-                    "A correction run requires a previous implementation run.");
-            }
-
-            var completedRetries = currentRuns - 1;
-
-            if (completedRetries >= _options.MaxCodexRetries)
-            {
-                throw new CodexBudgetExceededException(
-                    $"Task {taskId} has exhausted its corrective Codex run budget "
-                    + $"({_options.MaxCodexRetries}).");
-            }
+            throw new InvalidOperationException(
+                "A correction run requires a previous implementation run.");
         }
 
         await _semaphore.WaitAsync(
             cancellationToken);
 
-        return new Lease(_semaphore);
+        return new Lease(
+            _semaphore);
     }
 
     public void Dispose() =>

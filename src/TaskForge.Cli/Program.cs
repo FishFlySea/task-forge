@@ -224,8 +224,21 @@ internal static class Program
                 Executable =
                     Environment.GetEnvironmentVariable(
                         "TASKFORGE_CODEX_EXECUTABLE")
-                    ?? "codex",
-                Timeout =
+                    ?? "codex"
+            };
+
+        var codexBudget =
+            new CodexBudgetOptions
+            {
+                MaxCodexRuns =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_CODEX_MAX_RUNS",
+                        2),
+                MaxConcurrentCodexRuns =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_CODEX_MAX_CONCURRENT_RUNS",
+                        1),
+                RunTimeout =
                     TimeSpan.FromSeconds(
                         GetPositiveIntEnvironmentVariable(
                             "TASKFORGE_CODEX_TIMEOUT_SECONDS",
@@ -242,12 +255,7 @@ internal static class Program
 
         var codexGate =
             new CodexRunGate(
-                new AgentBudgetOptions
-                {
-                    MaxCodexRunsPerTask = 2,
-                    MaxCodexRetries = 1,
-                    MaxConcurrentCodexRuns = 1
-                });
+                codexBudget);
 
         var orchestrator =
             new TaskOrchestrator(
@@ -259,7 +267,8 @@ internal static class Program
                     new FileSystemRepositorySearch()),
                 new ImplementerAgent(
                     new CodexCliClient(
-                        codexOptions)),
+                        codexOptions,
+                        codexBudget)),
                 codexGate,
                 new DotnetRunner(
                     new DotnetRunnerOptions
@@ -316,7 +325,7 @@ internal static class Program
 
             Console.WriteLine(
                 $"{run.Id.Value,-30} {run.State,-16} "
-                + $"{run.CodexRuns + "/2",-7} {tokens,-20} {run.StartedAt:O}");
+                + $"{run.CodexRuns,-7} {tokens,-20} {run.StartedAt:O}");
         }
 
         return 0;
@@ -430,7 +439,7 @@ internal static class Program
         Console.WriteLine(
             $"Base commit:    {inspection.TaskPacket?.BaseCommit ?? "-"}");
         Console.WriteLine(
-            $"Codex runs:     {metadata.CodexRuns}/2");
+            $"Codex runs:     {metadata.CodexRuns}");
         Console.WriteLine(
             $"Ready to apply: {(inspection.CanApply ? "yes" : "no")}");
         Console.WriteLine();

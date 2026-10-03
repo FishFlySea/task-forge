@@ -38,8 +38,10 @@ Completed / NeedsUser / Failed / BudgetExceeded
 ~~~
 
 TaskForge launches Codex with the multi-agent feature explicitly disabled.
-Each Codex invocation has an external timeout and rollout/token budget, and JSONL
-usage is persisted when available.
+Codex execution uses one shared budget model for max runs, concurrency, timeout and
+per-kind rollout/token limits. There is no separate retry counter: the default
+`MaxCodexRuns=2` means one Implementation plus at most one Correction. JSONL usage
+is persisted when available.
 
 Apply runs now use disposable detached Git worktrees created from the exact
 `baseCommit` stored by `plan`. Planning requires a clean source checkout so the
@@ -53,8 +55,8 @@ files before build/test and rejects out-of-scope writes as `NeedsUser`; policy
 violations never receive an automatic corrective Codex run.
 
 The architecture review still has additional hardening gaps: full TaskPacket context
-spans/command policy/budgets, unified run-budget semantics, explicit network/approval
-policy, and a common host sandbox boundary for build/test.
+spans/command policy/budgets, explicit network/approval policy, and a common host
+sandbox boundary for build/test.
 
 **Until ADR-0002 is fully implemented, run TaskForge only against repositories
 you trust.** A git worktree alone will not be treated as a host security boundary.
@@ -74,6 +76,8 @@ TASKFORGE_OLLAMA_URL=http://localhost:11434/
 TASKFORGE_OLLAMA_MODEL=qwen3-coder
 TASKFORGE_OLLAMA_TIMEOUT_SECONDS=120
 TASKFORGE_CODEX_EXECUTABLE=codex
+TASKFORGE_CODEX_MAX_RUNS=2
+TASKFORGE_CODEX_MAX_CONCURRENT_RUNS=1
 TASKFORGE_CODEX_TIMEOUT_SECONDS=1200
 TASKFORGE_CODEX_IMPLEMENTATION_TOKEN_BUDGET=40000
 TASKFORGE_CODEX_CORRECTION_TOKEN_BUDGET=20000
