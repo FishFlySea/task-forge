@@ -52,6 +52,10 @@ internal static class Program
                     store,
                     args[1..],
                     cancellation.Token),
+                "inspect" => await InspectRunAsync(
+                    store,
+                    args[1..],
+                    cancellation.Token),
                 _ => UnknownCommand(
                     args[0])
             };
@@ -378,6 +382,160 @@ internal static class Program
         return 0;
     }
 
+    private static async Task<int> InspectRunAsync(
+        IRunStore runStore,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        if (args.Length != 1
+            || string.IsNullOrWhiteSpace(
+                args[0]))
+        {
+            throw new ArgumentException(
+                "Usage: taskforge inspect <run-id>");
+        }
+
+        var inspector =
+            new RunInspector(
+                runStore);
+
+        var inspection =
+            await inspector.InspectAsync(
+                new TaskId(
+                    args[0]),
+                cancellationToken);
+
+        PrintInspection(
+            inspection);
+
+        return 0;
+    }
+
+    private static void PrintInspection(
+        RunInspection inspection)
+    {
+        var metadata =
+            inspection.Metadata;
+
+        Console.WriteLine(
+            $"ID:             {metadata.Id}");
+        Console.WriteLine(
+            $"State:          {metadata.State}");
+        Console.WriteLine(
+            $"Repository:     {metadata.RepositoryPath}");
+        Console.WriteLine(
+            $"Codex runs:     {metadata.CodexRuns}/2");
+        Console.WriteLine(
+            $"Ready to apply: {(inspection.CanApply ? "yes" : "no")}");
+        Console.WriteLine();
+
+        if (inspection.Request is not null)
+        {
+            Console.WriteLine("Goal:");
+            Console.WriteLine(
+                $"  {inspection.Request.Goal}");
+            Console.WriteLine();
+        }
+
+        if (inspection.Plan is not null)
+        {
+            Console.WriteLine("Plan:");
+            Console.WriteLine(
+                $"  {inspection.Plan.Summary}");
+
+            PrintItems(
+                "Search terms",
+                inspection.Plan.SearchTerms);
+
+            PrintItems(
+                "Likely areas",
+                inspection.Plan.LikelyAreas);
+        }
+
+        var acceptanceCriteria =
+            inspection.TaskPacket?.AcceptanceCriteria
+            ?? inspection.Plan?.AcceptanceCriteria
+            ?? [];
+
+        PrintItems(
+            "Acceptance criteria",
+            acceptanceCriteria);
+
+        PrintItems(
+            "Relevant files",
+            inspection.TaskPacket?.RelevantFiles
+            ?? inspection.Exploration?.RelevantFiles
+            ?? []);
+
+        PrintItems(
+            "Observations",
+            inspection.TaskPacket?.Observations
+            ?? inspection.Exploration?.Observations
+            ?? []);
+
+        var testTargets =
+            inspection.TaskPacket?.TestTargets
+            ?? inspection.Exploration?.TestTargets
+            ?? [];
+
+        if (testTargets.Count > 0)
+        {
+            Console.WriteLine("Test targets:");
+
+            foreach (var target in testTargets)
+            {
+                var filter =
+                    string.IsNullOrWhiteSpace(
+                        target.Filter)
+                        ? string.Empty
+                        : $" [filter: {target.Filter}]";
+
+                Console.WriteLine(
+                    $"  - {target.ProjectPath}{filter}");
+            }
+
+            Console.WriteLine();
+        }
+
+        if (inspection.Exploration is not null)
+        {
+            Console.WriteLine(
+                $"Explorer confidence: {inspection.Exploration.Confidence:P0}");
+            Console.WriteLine();
+        }
+
+        PrintItems(
+            "Warnings",
+            inspection.Warnings);
+
+        if (inspection.CanApply)
+        {
+            Console.WriteLine(
+                $"Next: taskforge apply {metadata.Id}");
+        }
+    }
+
+    private static void PrintItems(
+        string title,
+        IReadOnlyList<string> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        Console.WriteLine(
+            $"{title}:");
+
+        foreach (var item in items)
+        {
+            Console.WriteLine(
+                $"  - {item}");
+        }
+
+        Console.WriteLine();
+    }
+
     private static TaskRequest ParseTaskRequest(
         string[] args,
         string command)
@@ -520,6 +678,8 @@ internal static class Program
             "  taskforge runs");
         Console.WriteLine(
             "  taskforge show <run-id>");
+        Console.WriteLine(
+            "  taskforge inspect <run-id>");
     }
 
     private sealed class OrchestratorRuntime(

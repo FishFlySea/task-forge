@@ -97,7 +97,13 @@ Inspect runs:
 ~~~bash
 dotnet run --project src/TaskForge.Cli -- runs
 dotnet run --project src/TaskForge.Cli -- show <run-id>
+dotnet run --project src/TaskForge.Cli -- inspect <run-id>
 ~~~
+
+`show` displays run metadata and Codex usage. `inspect` is a zero-model-cost
+preflight view: it reads the saved request, plan, exploration result and TaskPacket,
+shows acceptance criteria, relevant files, observations and test targets, and reports
+whether the run is currently safe to pass to `apply`.
 
 Set `TASKFORGE_RUNS_DIRECTORY` to override the local run storage directory.
 
