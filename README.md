@@ -49,10 +49,16 @@ selected context matches that commit. Codex, authoritative build/test, diagnosti
 and review operate in the isolated worktree; final workspace status/diff is persisted
 before cleanup.
 
-TaskPacket now also carries a deterministic write scope derived from selected source
-areas and test projects. After every Codex coding run, TaskForge snapshots changed
-files before build/test and rejects out-of-scope writes as `NeedsUser`; policy
-violations never receive an automatic corrective Codex run.
+TaskPacket now carries both a deterministic write scope and bounded prepared context.
+After Explorer selects relevant files, a deterministic context collector extracts
+line ranges around the plan's search terms. The default context budget is 32,000
+characters with at most 8,000 characters per span; the packet records actual
+characters and an approximate token count. Codex receives these excerpts before it
+decides whether additional file reads are necessary.
+
+After every Codex coding run, TaskForge snapshots changed files before build/test and
+rejects out-of-scope writes as `NeedsUser`; policy violations never receive an
+automatic corrective Codex run.
 
 The architecture review still has additional hardening gaps: full TaskPacket context
 spans/command policy/budgets, explicit network/approval policy, and a common host
@@ -81,6 +87,9 @@ TASKFORGE_CODEX_MAX_CONCURRENT_RUNS=1
 TASKFORGE_CODEX_TIMEOUT_SECONDS=1200
 TASKFORGE_CODEX_IMPLEMENTATION_TOKEN_BUDGET=40000
 TASKFORGE_CODEX_CORRECTION_TOKEN_BUDGET=20000
+TASKFORGE_PACKET_MAX_CONTEXT_CHARS=32000
+TASKFORGE_PACKET_MAX_SPAN_CHARS=8000
+TASKFORGE_PACKET_APPROX_CHARS_PER_TOKEN=4
 TASKFORGE_DOTNET_EXECUTABLE=dotnet
 TASKFORGE_WORKTREES_DIRECTORY=<OS local app data>/TaskForge/worktrees
 ~~~
@@ -118,8 +127,9 @@ dotnet run --project src/TaskForge.Cli -- inspect <run-id>
 
 `show` displays run metadata and Codex usage. `inspect` is a zero-model-cost
 preflight view: it reads the saved request, plan, exploration result and TaskPacket,
-shows acceptance criteria, relevant files, observations, write scope and test targets,
-and reports whether the run is currently safe to pass to `apply`.
+shows acceptance criteria, relevant files, prepared context line ranges, context
+budget, observations, write scope and test targets, and reports whether the run is
+currently safe to pass to `apply`.
 
 Set `TASKFORGE_RUNS_DIRECTORY` to override the local run storage directory.
 

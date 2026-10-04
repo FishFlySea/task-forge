@@ -8,6 +8,7 @@ public static class TaskPacketFactory
         TaskRequest request,
         PlanResult plan,
         ExplorationResult exploration,
+        ContextCollectionResult context,
         string baseCommit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(
@@ -15,7 +16,7 @@ public static class TaskPacketFactory
 
         return new TaskPacket
         {
-            SchemaVersion = 1,
+            SchemaVersion = 2,
             BaseCommit = baseCommit,
             Goal = request.Goal,
             Constraints = [],
@@ -26,6 +27,8 @@ public static class TaskPacketFactory
             RelevantFiles = exploration.RelevantFiles
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
+            ContextSpans = context.Spans,
+            Budget = context.Budget,
             Observations = exploration.Observations
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct()

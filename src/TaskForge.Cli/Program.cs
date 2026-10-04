@@ -257,6 +257,23 @@ internal static class Program
             new CodexRunGate(
                 codexBudget);
 
+        var taskPacketOptions =
+            new TaskPacketOptions
+            {
+                MaxContextCharacters =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_MAX_CONTEXT_CHARS",
+                        32_000),
+                MaxSpanCharacters =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_MAX_SPAN_CHARS",
+                        8_000),
+                ApproximateCharactersPerToken =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_APPROX_CHARS_PER_TOKEN",
+                        4)
+            };
+
         var orchestrator =
             new TaskOrchestrator(
                 runStore,
@@ -265,6 +282,8 @@ internal static class Program
                 new ExplorerAgent(
                     localLlm,
                     new FileSystemRepositorySearch()),
+                new FileSystemContextCollector(
+                    taskPacketOptions),
                 new ImplementerAgent(
                     new CodexCliClient(
                         codexOptions,
@@ -439,7 +458,16 @@ internal static class Program
         Console.WriteLine(
             $"Base commit:    {inspection.TaskPacket?.BaseCommit ?? "-"}");
         Console.WriteLine(
+            $"Packet schema:  {inspection.TaskPacket?.SchemaVersion.ToString() ?? "-"}");
+        Console.WriteLine(
             $"Codex runs:     {metadata.CodexRuns}");
+
+        if (inspection.TaskPacket?.Budget is { } packetBudget)
+        {
+            Console.WriteLine(
+                $"Context:        {packetBudget.UsedContextCharacters}/{packetBudget.MaxContextCharacters} chars (~{packetBudget.EstimatedContextTokens} tokens)");
+        }
+
         Console.WriteLine(
             $"Ready to apply: {(inspection.CanApply ? "yes" : "no")}");
         Console.WriteLine();
@@ -481,6 +509,19 @@ internal static class Program
             inspection.TaskPacket?.RelevantFiles
             ?? inspection.Exploration?.RelevantFiles
             ?? []);
+
+        if (inspection.TaskPacket?.ContextSpans.Count > 0)
+        {
+            Console.WriteLine("Prepared context:");
+
+            foreach (var span in inspection.TaskPacket.ContextSpans)
+            {
+                Console.WriteLine(
+                    $"  - {span.Path}:{span.StartLine}-{span.EndLine} ({span.Content.Length} chars)");
+            }
+
+            Console.WriteLine();
+        }
 
         PrintItems(
             "Observations",

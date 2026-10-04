@@ -72,6 +72,10 @@ public sealed class ImplementerAgent(
             "Relevant files",
             taskPacket.RelevantFiles);
 
+        AppendContextSpans(
+            builder,
+            taskPacket.ContextSpans);
+
         AppendSection(
             builder,
             "Allowed write scope",
@@ -100,6 +104,30 @@ public sealed class ImplementerAgent(
         builder.AppendLine("4. stop.");
 
         return builder.ToString();
+    }
+
+    private static void AppendContextSpans(
+        StringBuilder builder,
+        IReadOnlyList<ContextSpan> spans)
+    {
+        if (spans.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine(
+            "Prepared context excerpts:");
+
+        foreach (var span in spans)
+        {
+            builder.AppendLine();
+            builder.AppendLine(
+                $"--- {span.Path}:{span.StartLine}-{span.EndLine} ---");
+            builder.AppendLine(
+                span.Content);
+        }
+
+        builder.AppendLine();
     }
 
     private static void AppendSection(

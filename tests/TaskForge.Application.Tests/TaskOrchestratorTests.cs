@@ -32,6 +32,7 @@ public sealed class TaskOrchestratorTests
                 store,
                 planner,
                 explorer,
+                new FakeContextCollector(),
                 implementer,
                 gate,
                 workspaceManager);
@@ -122,6 +123,7 @@ public sealed class TaskOrchestratorTests
                 store,
                 new FakePlannerAgent(),
                 new FakeExplorerAgent(),
+                new FakeContextCollector(),
                 new FakeImplementerAgent(),
                 gate,
                 new FakeWorkspaceManager(
@@ -167,6 +169,7 @@ public sealed class TaskOrchestratorTests
                 store,
                 new FakePlannerAgent(),
                 new FakeExplorerAgent(),
+                new FakeContextCollector(),
                 new FakeImplementerAgent(),
                 gate,
                 new FakeWorkspaceManager());
@@ -203,6 +206,7 @@ public sealed class TaskOrchestratorTests
         FakeRunStore store,
         FakePlannerAgent planner,
         FakeExplorerAgent explorer,
+        FakeContextCollector contextCollector,
         FakeImplementerAgent implementer,
         CodexRunGate gate,
         FakeWorkspaceManager workspaceManager,
@@ -211,6 +215,7 @@ public sealed class TaskOrchestratorTests
             store,
             planner,
             explorer,
+            contextCollector,
             implementer,
             gate,
             dotnetRunner ?? new FakeDotnetRunner(),
@@ -272,6 +277,36 @@ public sealed class TaskOrchestratorTests
                     Confidence = 0.9
                 });
         }
+    }
+
+    private sealed class FakeContextCollector :
+        IContextCollector
+    {
+        public Task<ContextCollectionResult> CollectAsync(
+            string repositoryPath,
+            IReadOnlyList<string> relevantFiles,
+            IReadOnlyCollection<string> searchTerms,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                new ContextCollectionResult
+                {
+                    Spans =
+                    [
+                        new ContextSpan
+                        {
+                            Path = relevantFiles[0],
+                            StartLine = 1,
+                            EndLine = 20,
+                            Content = "public sealed class PlannerAgent { }"
+                        }
+                    ],
+                    Budget = new TaskPacketBudget
+                    {
+                        MaxContextCharacters = 32_000,
+                        UsedContextCharacters = 36,
+                        EstimatedContextTokens = 9
+                    }
+                });
     }
 
     private sealed class FakeImplementerAgent :

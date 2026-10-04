@@ -6,6 +6,7 @@ public sealed class TaskOrchestrator(
     IRunStore runStore,
     IPlannerAgent plannerAgent,
     IExplorerAgent explorerAgent,
+    IContextCollector contextCollector,
     IImplementerAgent implementerAgent,
     ICodexRunGate codexRunGate,
     IDotnetRunner dotnetRunner,
@@ -18,6 +19,7 @@ public sealed class TaskOrchestrator(
     private readonly IRunStore _runStore = runStore;
     private readonly IPlannerAgent _plannerAgent = plannerAgent;
     private readonly IExplorerAgent _explorerAgent = explorerAgent;
+    private readonly IContextCollector _contextCollector = contextCollector;
     private readonly IImplementerAgent _implementerAgent = implementerAgent;
     private readonly ICodexRunGate _codexRunGate = codexRunGate;
     private readonly IDotnetRunner _dotnetRunner = dotnetRunner;
@@ -112,10 +114,24 @@ public sealed class TaskOrchestrator(
                 exploration,
                 cancellationToken);
 
+            var context =
+                await _contextCollector.CollectAsync(
+                    request.RepositoryPath,
+                    exploration.RelevantFiles,
+                    plan.SearchTerms,
+                    cancellationToken);
+
+            await _runStore.SaveArtifactAsync(
+                metadata.Id,
+                "context.json",
+                context,
+                cancellationToken);
+
             var taskPacket = TaskPacketFactory.Create(
                 request,
                 plan,
                 exploration,
+                context,
                 baseCommit);
 
             await _runStore.SaveArtifactAsync(
@@ -237,6 +253,17 @@ public sealed class TaskOrchestrator(
         {
             throw new InvalidOperationException(
                 $"Run {taskId} has an empty write scope and cannot be safely applied.");
+        }
+
+        if (taskPacket.SchemaVersion < 2
+            || taskPacket.Budget is null
+            || taskPacket.Budget.UsedContextCharacters
+               > taskPacket.Budget.MaxContextCharacters
+            || taskPacket.RelevantFiles.Count > 0
+               && taskPacket.ContextSpans.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Run {taskId} does not contain a valid bounded context packet.");
         }
 
         WorkspaceHandle? workspace = null;
