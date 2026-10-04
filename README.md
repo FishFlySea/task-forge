@@ -49,20 +49,26 @@ selected context matches that commit. Codex, authoritative build/test, diagnosti
 and review operate in the isolated worktree; final workspace status/diff is persisted
 before cleanup.
 
-TaskPacket now carries both a deterministic write scope and bounded prepared context.
+TaskPacket schema v3 now carries a deterministic write scope, bounded prepared
+context, typed verification command policy, and a snapshot of the maximum Codex
+execution budget captured at plan time.
 After Explorer selects relevant files, a deterministic context collector extracts
 line ranges around the plan's search terms. The default context budget is 32,000
 characters with at most 8,000 characters per span; the packet records actual
 characters and an approximate token count. Codex receives these excerpts before it
 decides whether additional file reads are necessary.
 
+At apply time, the current Codex configuration may be equal to or stricter than the
+saved execution budget, but it may not be more permissive. The command policy
+explicitly authorizes the orchestrator-owned `DotnetBuild` and targeted
+`DotnetTest` operations.
+
 After every Codex coding run, TaskForge snapshots changed files before build/test and
 rejects out-of-scope writes as `NeedsUser`; policy violations never receive an
 automatic corrective Codex run.
 
-The architecture review still has additional hardening gaps: full TaskPacket context
-spans/command policy/budgets, explicit network/approval policy, and a common host
-sandbox boundary for build/test.
+The architecture review still has additional hardening gaps: explicit network/approval
+policy, prompt/model/tool manifests and a common host sandbox boundary for build/test.
 
 **Until ADR-0002 is fully implemented, run TaskForge only against repositories
 you trust.** A git worktree alone will not be treated as a host security boundary.

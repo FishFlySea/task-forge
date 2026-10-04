@@ -155,6 +155,83 @@ public sealed class TaskOrchestratorTests
     }
 
     [Fact]
+    public async Task Apply_rejects_runtime_budget_looser_than_planned_packet()
+    {
+        var store =
+            new FakeRunStore();
+
+        var plannedBudget =
+            new CodexBudgetOptions
+            {
+                MaxCodexRuns = 2,
+                MaxConcurrentCodexRuns = 1,
+                RunTimeout = TimeSpan.FromMinutes(10),
+                ImplementationTokenBudget = 20_000,
+                CorrectionTokenBudget = 10_000
+            };
+
+        using var planningGate =
+            new CodexRunGate(
+                plannedBudget);
+
+        var planningOrchestrator =
+            CreateOrchestrator(
+                store,
+                new FakePlannerAgent(),
+                new FakeExplorerAgent(),
+                new FakeContextCollector(),
+                new FakeImplementerAgent(),
+                planningGate,
+                new FakeWorkspaceManager(),
+                codexBudget: plannedBudget);
+
+        var planned =
+            await planningOrchestrator.PlanAsync(
+                new TaskRequest(
+                    "Implement planner",
+                    Directory.GetCurrentDirectory()),
+                CancellationToken.None);
+
+        var looserBudget =
+            plannedBudget with
+            {
+                ImplementationTokenBudget = 40_000
+            };
+
+        using var applyGate =
+            new CodexRunGate(
+                looserBudget);
+
+        var implementer =
+            new FakeImplementerAgent();
+
+        var applyOrchestrator =
+            CreateOrchestrator(
+                store,
+                new FakePlannerAgent(),
+                new FakeExplorerAgent(),
+                new FakeContextCollector(),
+                implementer,
+                applyGate,
+                new FakeWorkspaceManager(),
+                codexBudget: looserBudget);
+
+        var exception =
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => applyOrchestrator.ApplyAsync(
+                    planned.Id,
+                    CancellationToken.None));
+
+        Assert.Contains(
+            "exceeds the planned packet limit",
+            exception.Message);
+
+        Assert.Equal(
+            0,
+            implementer.Calls);
+    }
+
+    [Fact]
     public async Task Run_keeps_one_shot_behavior()
     {
         var store =
@@ -210,7 +287,8 @@ public sealed class TaskOrchestratorTests
         FakeImplementerAgent implementer,
         CodexRunGate gate,
         FakeWorkspaceManager workspaceManager,
-        FakeDotnetRunner? dotnetRunner = null) =>
+        FakeDotnetRunner? dotnetRunner = null,
+        CodexBudgetOptions? codexBudget = null) =>
         new(
             store,
             planner,
@@ -218,6 +296,7 @@ public sealed class TaskOrchestratorTests
             contextCollector,
             implementer,
             gate,
+            codexBudget ?? new CodexBudgetOptions(),
             dotnetRunner ?? new FakeDotnetRunner(),
             new FakeGitClient(),
             workspaceManager,

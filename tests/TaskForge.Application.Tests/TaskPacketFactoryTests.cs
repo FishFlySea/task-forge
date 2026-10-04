@@ -58,10 +58,11 @@ public sealed class TaskPacketFactoryTests
                     Confidence = 1
                 },
                 context,
-                "0123456789abcdef0123456789abcdef01234567");
+                "0123456789abcdef0123456789abcdef01234567",
+                new CodexBudgetOptions());
 
         Assert.Equal(
-            2,
+            3,
             packet.SchemaVersion);
 
         Assert.Same(
@@ -74,5 +75,17 @@ public sealed class TaskPacketFactoryTests
 
         Assert.NotEmpty(
             packet.WriteScope);
+
+        Assert.NotNull(
+            packet.ExecutionBudget);
+
+        Assert.Equal(
+            2,
+            packet.ExecutionBudget!.MaxCodexRuns);
+
+        Assert.Contains(
+            packet.AllowedCommands,
+            x => x.Tool
+                 == TaskCommandTool.DotnetBuild);
     }
 }

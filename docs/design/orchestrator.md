@@ -689,7 +689,7 @@ Routing policy меняется только после накопления eva
 - persistent run artifacts;
 - `baseCommit` pinning и clean-checkout planning preflight;
 - disposable detached git worktree lifecycle;
-- schema-v2 TaskPacket с bounded `contextSpans` и recorded context budget;
+- schema-v3 TaskPacket с bounded `contextSpans`, context budget, typed command policy и pinned execution-budget ceiling;
 - workspace snapshots с tracked/untracked diff;
 - deterministic TaskPacket `writeScope`;
 - post-worker write-scope validation до build/test;
@@ -697,8 +697,7 @@ Routing policy меняется только после накопления eva
 
 Для соответствия ADR остаются изменения:
 
-1. завершить versioned TaskPacket: command policy и run-budget fields;
-2. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
+1. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
 3. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
 4. сделать approval/network policy launch-time explicit;
 5. сохранить prompt/model/tool manifest;
