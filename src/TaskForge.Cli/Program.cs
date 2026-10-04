@@ -289,6 +289,7 @@ internal static class Program
                         codexOptions,
                         codexBudget)),
                 codexGate,
+                codexBudget,
                 new DotnetRunner(
                     new DotnetRunnerOptions
                     {
@@ -468,6 +469,12 @@ internal static class Program
                 $"Context:        {packetBudget.UsedContextCharacters}/{packetBudget.MaxContextCharacters} chars (~{packetBudget.EstimatedContextTokens} tokens)");
         }
 
+        if (inspection.TaskPacket?.ExecutionBudget is { } executionBudget)
+        {
+            Console.WriteLine(
+                $"Exec budget:    runs={executionBudget.MaxCodexRuns}, impl={executionBudget.ImplementationTokenBudget}, fix={executionBudget.CorrectionTokenBudget}, timeout={executionBudget.RunTimeoutSeconds}s");
+        }
+
         Console.WriteLine(
             $"Ready to apply: {(inspection.CanApply ? "yes" : "no")}");
         Console.WriteLine();
@@ -533,6 +540,31 @@ internal static class Program
             "Write scope",
             inspection.TaskPacket?.WriteScope
             ?? []);
+
+        if (inspection.TaskPacket?.AllowedCommands.Count > 0)
+        {
+            Console.WriteLine("Allowed commands:");
+
+            foreach (var command in inspection.TaskPacket.AllowedCommands)
+            {
+                var project =
+                    string.IsNullOrWhiteSpace(
+                        command.ProjectPath)
+                        ? string.Empty
+                        : $" {command.ProjectPath}";
+
+                var filter =
+                    string.IsNullOrWhiteSpace(
+                        command.Filter)
+                        ? string.Empty
+                        : $" [filter: {command.Filter}]";
+
+                Console.WriteLine(
+                    $"  - {command.Tool}{project}{filter}");
+            }
+
+            Console.WriteLine();
+        }
 
         var testTargets =
             inspection.TaskPacket?.TestTargets

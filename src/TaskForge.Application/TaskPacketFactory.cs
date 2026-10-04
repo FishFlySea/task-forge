@@ -9,14 +9,15 @@ public static class TaskPacketFactory
         PlanResult plan,
         ExplorationResult exploration,
         ContextCollectionResult context,
-        string baseCommit)
+        string baseCommit,
+        CodexBudgetOptions codexBudget)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(
             baseCommit);
 
         return new TaskPacket
         {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
             BaseCommit = baseCommit,
             Goal = request.Goal,
             Constraints = [],
@@ -29,6 +30,12 @@ public static class TaskPacketFactory
                 .ToArray(),
             ContextSpans = context.Spans,
             Budget = context.Budget,
+            ExecutionBudget =
+                TaskExecutionBudgetPolicy.Snapshot(
+                    codexBudget),
+            AllowedCommands =
+                TaskCommandPolicy.Derive(
+                    exploration.TestTargets),
             Observations = exploration.Observations
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct()

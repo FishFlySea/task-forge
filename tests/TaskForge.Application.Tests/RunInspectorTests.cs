@@ -50,7 +50,7 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 2,
+                        SchemaVersion = 3,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         ContextSpans =
                         [
@@ -68,6 +68,21 @@ public sealed class RunInspectorTests
                             UsedContextCharacters = 13,
                             EstimatedContextTokens = 4
                         },
+                        ExecutionBudget = new TaskExecutionBudget
+                        {
+                            MaxCodexRuns = 2,
+                            MaxConcurrentCodexRuns = 1,
+                            RunTimeoutSeconds = 1200,
+                            ImplementationTokenBudget = 40_000,
+                            CorrectionTokenBudget = 20_000
+                        },
+                        AllowedCommands =
+                        [
+                            new TaskCommandPolicyEntry
+                            {
+                                Tool = TaskCommandTool.DotnetBuild
+                            }
+                        ],
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =
@@ -192,7 +207,7 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 2,
+                        SchemaVersion = 3,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
                         ContextSpans =
                         [
@@ -210,6 +225,21 @@ public sealed class RunInspectorTests
                             UsedContextCharacters = 13,
                             EstimatedContextTokens = 4
                         },
+                        ExecutionBudget = new TaskExecutionBudget
+                        {
+                            MaxCodexRuns = 2,
+                            MaxConcurrentCodexRuns = 1,
+                            RunTimeoutSeconds = 1200,
+                            ImplementationTokenBudget = 40_000,
+                            CorrectionTokenBudget = 20_000
+                        },
+                        AllowedCommands =
+                        [
+                            new TaskCommandPolicyEntry
+                            {
+                                Tool = TaskCommandTool.DotnetBuild
+                            }
+                        ],
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =

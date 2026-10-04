@@ -81,6 +81,10 @@ public sealed class ImplementerAgent(
             "Allowed write scope",
             taskPacket.WriteScope);
 
+        AppendCommandPolicy(
+            builder,
+            taskPacket.AllowedCommands);
+
         AppendSection(
             builder,
             "Observations",
@@ -104,6 +108,44 @@ public sealed class ImplementerAgent(
         builder.AppendLine("4. stop.");
 
         return builder.ToString();
+    }
+
+    private static void AppendCommandPolicy(
+        StringBuilder builder,
+        IReadOnlyList<TaskCommandPolicyEntry> commands)
+    {
+        if (commands.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine(
+            "Verification command policy:");
+
+        foreach (var command in commands)
+        {
+            builder.Append("- ");
+            builder.Append(
+                command.Tool);
+
+            if (!string.IsNullOrWhiteSpace(
+                    command.ProjectPath))
+            {
+                builder.Append(
+                    $" {command.ProjectPath}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(
+                    command.Filter))
+            {
+                builder.Append(
+                    $" [filter: {command.Filter}]");
+            }
+
+            builder.AppendLine();
+        }
+
+        builder.AppendLine();
     }
 
     private static void AppendContextSpans(
