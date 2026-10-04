@@ -50,8 +50,24 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 1,
+                        SchemaVersion = 2,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
+                        ContextSpans =
+                        [
+                            new ContextSpan
+                            {
+                                Path = "src/Bug.cs",
+                                StartLine = 1,
+                                EndLine = 10,
+                                Content = "class Bug { }"
+                            }
+                        ],
+                        Budget = new TaskPacketBudget
+                        {
+                            MaxContextCharacters = 32_000,
+                            UsedContextCharacters = 13,
+                            EstimatedContextTokens = 4
+                        },
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =
@@ -176,8 +192,24 @@ public sealed class RunInspectorTests
                 Packet =
                     new TaskPacket
                     {
-                        SchemaVersion = 1,
+                        SchemaVersion = 2,
                         BaseCommit = "0123456789abcdef0123456789abcdef01234567",
+                        ContextSpans =
+                        [
+                            new ContextSpan
+                            {
+                                Path = "src/Bug.cs",
+                                StartLine = 1,
+                                EndLine = 10,
+                                Content = "class Bug { }"
+                            }
+                        ],
+                        Budget = new TaskPacketBudget
+                        {
+                            MaxContextCharacters = 32_000,
+                            UsedContextCharacters = 13,
+                            EstimatedContextTokens = 4
+                        },
                         Goal = "Fix the bug",
                         Constraints = [],
                         AcceptanceCriteria =

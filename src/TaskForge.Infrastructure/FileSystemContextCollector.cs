@@ -214,7 +214,8 @@ public sealed class FileSystemContextCollector(
 
             if (builder.Length > 0)
             {
-                builder.AppendLine();
+                builder.Append(
+                    '\n');
             }
 
             builder.Append(
