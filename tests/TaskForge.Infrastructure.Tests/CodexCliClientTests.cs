@@ -22,7 +22,7 @@ public sealed class CodexCliClientTests
     [Theory]
     [InlineData(CodexRunKind.Implementation, 40000)]
     [InlineData(CodexRunKind.Correction, 20000)]
-    public void Command_hard_disables_multi_agent_and_sets_rollout_budget(
+    public void Command_enforces_noninteractive_offline_workspace_policy_and_budget(
         CodexRunKind kind,
         int tokenBudget)
     {
@@ -42,14 +42,20 @@ public sealed class CodexCliClientTests
                 "--disable",
                 "multi_agent",
                 "-c",
+                "sandbox_workspace_write.network_access=false",
+                "-c",
+                "web_search=\"disabled\"",
+                "-c",
                 "features.rollout_budget.enabled=true",
                 "-c",
                 $"features.rollout_budget.limit_tokens={tokenBudget}",
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
                 "exec",
                 "--json",
                 "--ephemeral",
-                "--sandbox",
-                "workspace-write",
                 "implement the task"
             ],
             arguments);

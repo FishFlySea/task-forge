@@ -682,6 +682,8 @@ Routing policy меняется только после накопления eva
 - structured Ollama output;
 - two-run implementation/correction workflow;
 - Codex multi-agent disable;
+- explicit Codex `workspace-write` + `approval=never` launch policy;
+- sandboxed shell network disabled and built-in web search disabled;
 - per-run timeout;
 - process-tree kill;
 - Codex JSONL usage parsing;
@@ -699,7 +701,7 @@ Routing policy меняется только после накопления eva
 
 1. заменить application-level `ICodexClient/IImplementerAgent` на `ICodingWorker`, оставив Codex CLI внутри infrastructure;
 3. перейти с собственного generic local client к `Microsoft.Extensions.AI.IChatClient` или adapter поверх него;
-4. сделать approval/network policy launch-time explicit;
+4. изолировать Codex от user-level MCP/config surfaces и ввести environment allowlist;
 5. сохранить prompt/model/tool manifest;
 6. добавить metrics для context quality и terminal-state rates;
 7. изолировать build/test process boundary либо явно оставить trusted-repository limitation до реализации.

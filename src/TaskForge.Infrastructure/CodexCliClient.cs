@@ -68,14 +68,20 @@ public sealed class CodexCliClient : ICodexClient
             "--disable",
             "multi_agent",
             "-c",
+            "sandbox_workspace_write.network_access=false",
+            "-c",
+            "web_search=\"disabled\"",
+            "-c",
             "features.rollout_budget.enabled=true",
             "-c",
             $"features.rollout_budget.limit_tokens={tokenBudget}",
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
             "exec",
             "--json",
             "--ephemeral",
-            "--sandbox",
-            "workspace-write",
             request.Prompt
         ];
 
