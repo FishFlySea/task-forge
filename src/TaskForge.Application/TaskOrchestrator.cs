@@ -9,6 +9,7 @@ public sealed class TaskOrchestrator(
     IContextCollector contextCollector,
     IImplementerAgent implementerAgent,
     ICodexRunGate codexRunGate,
+    CodexBudgetOptions codexBudget,
     IDotnetRunner dotnetRunner,
     IGitClient gitClient,
     IWorkspaceManager workspaceManager,
@@ -22,6 +23,7 @@ public sealed class TaskOrchestrator(
     private readonly IContextCollector _contextCollector = contextCollector;
     private readonly IImplementerAgent _implementerAgent = implementerAgent;
     private readonly ICodexRunGate _codexRunGate = codexRunGate;
+    private readonly CodexBudgetOptions _codexBudget = codexBudget;
     private readonly IDotnetRunner _dotnetRunner = dotnetRunner;
     private readonly IGitClient _gitClient = gitClient;
     private readonly IWorkspaceManager _workspaceManager = workspaceManager;
@@ -132,7 +134,8 @@ public sealed class TaskOrchestrator(
                 plan,
                 exploration,
                 context,
-                baseCommit);
+                baseCommit,
+                _codexBudget);
 
             await _runStore.SaveArtifactAsync(
                 metadata.Id,
@@ -255,7 +258,7 @@ public sealed class TaskOrchestrator(
                 $"Run {taskId} has an empty write scope and cannot be safely applied.");
         }
 
-        if (taskPacket.SchemaVersion < 2
+        if (taskPacket.SchemaVersion < 3
             || taskPacket.Budget is null
             || taskPacket.Budget.UsedContextCharacters
                > taskPacket.Budget.MaxContextCharacters
@@ -263,7 +266,34 @@ public sealed class TaskOrchestrator(
                && taskPacket.ContextSpans.Count == 0)
         {
             throw new InvalidOperationException(
-                $"Run {taskId} does not contain a valid bounded context packet.");
+                $"Run {taskId} does not contain a valid schema-v3 bounded context packet.");
+        }
+
+        var commandPolicyErrors =
+            TaskCommandPolicy.Validate(
+                taskPacket);
+
+        if (commandPolicyErrors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "TaskPacket command policy is invalid: "
+                + string.Join(
+                    "; ",
+                    commandPolicyErrors));
+        }
+
+        var budgetPolicyErrors =
+            TaskExecutionBudgetPolicy.ValidateRuntimeWithinPacket(
+                taskPacket.ExecutionBudget,
+                _codexBudget);
+
+        if (budgetPolicyErrors.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "TaskPacket execution budget is incompatible with the current runtime: "
+                + string.Join(
+                    "; ",
+                    budgetPolicyErrors));
         }
 
         WorkspaceHandle? workspace = null;

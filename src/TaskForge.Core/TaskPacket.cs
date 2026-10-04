@@ -18,6 +18,10 @@ public sealed record TaskPacket
 
     public TaskPacketBudget? Budget { get; init; }
 
+    public TaskExecutionBudget? ExecutionBudget { get; init; }
+
+    public IReadOnlyList<TaskCommandPolicyEntry> AllowedCommands { get; init; } = [];
+
     public required IReadOnlyList<string> Observations { get; init; }
 
     public IReadOnlyList<string> WriteScope { get; init; } = [];

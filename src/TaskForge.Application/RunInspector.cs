@@ -54,12 +54,16 @@ public sealed class RunInspector(
         var canApply =
             !string.IsNullOrWhiteSpace(
                 taskPacket?.BaseCommit)
-            && taskPacket.SchemaVersion >= 2
+            && taskPacket.SchemaVersion >= 3
             && taskPacket.Budget is not null
             && taskPacket.Budget.UsedContextCharacters
                <= taskPacket.Budget.MaxContextCharacters
             && (taskPacket.RelevantFiles.Count == 0
                 || taskPacket.ContextSpans.Count > 0)
+            && TaskCommandPolicy.Validate(
+                   taskPacket).Count == 0
+            && TaskExecutionBudgetPolicy.ValidatePacket(
+                   taskPacket.ExecutionBudget).Count == 0
             && taskPacket.WriteScope.Count > 0
             && metadata.State
                 is WorkflowState.ReadyToApply
@@ -130,10 +134,10 @@ public sealed class RunInspector(
                     "TaskPacket has an empty write scope and cannot be safely applied.");
             }
 
-            if (taskPacket.SchemaVersion < 2)
+            if (taskPacket.SchemaVersion < 3)
             {
                 warnings.Add(
-                    $"TaskPacket schema v{taskPacket.SchemaVersion} does not contain bounded context.");
+                    $"TaskPacket schema v{taskPacket.SchemaVersion} does not contain the current command/budget policy contract.");
             }
 
             if (taskPacket.Budget is null)
@@ -154,6 +158,14 @@ public sealed class RunInspector(
                 warnings.Add(
                     "TaskPacket has relevant files but no prepared context spans.");
             }
+
+            warnings.AddRange(
+                TaskCommandPolicy.Validate(
+                    taskPacket));
+
+            warnings.AddRange(
+                TaskExecutionBudgetPolicy.ValidatePacket(
+                    taskPacket.ExecutionBudget));
         }
 
         if (!Directory.Exists(
