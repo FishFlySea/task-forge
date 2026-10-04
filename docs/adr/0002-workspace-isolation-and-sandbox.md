@@ -204,6 +204,9 @@ TaskForge прекращает автоматический workflow. Допол
 
 - Codex timeout и process-tree kill;
 - workspace-write sandbox и explicit multi-agent disable;
+- launch-time `approval_policy=never` для non-interactive worker;
+- `sandbox_workspace_write.network_access=false`;
+- built-in `web_search=disabled`;
 - фиксация `baseCommit` на planning;
 - clean-checkout preflight;
 - disposable detached git worktree для каждого apply;
@@ -213,6 +216,8 @@ TaskForge прекращает автоматический workflow. Допол
 - post-worker write-scope validation до build/test;
 - остановка в `NeedsUser` без corrective run при выходе за write scope.
 
-Ещё не реализован полноценный общий process/container sandbox для Codex и build/test,
-а также explicit network/approval policy и command policy. Поэтому TaskForge по-прежнему
-должен использоваться только с trusted repositories.
+Ещё не реализован полноценный общий process/container sandbox для Codex и build/test.
+Также TaskForge пока не изолирует user-level MCP/config surfaces и не использует
+environment allowlist, поэтому запрет shell-network и built-in web search нельзя
+считать полной изоляцией всех внешних интеграций. TaskForge по-прежнему должен
+использоваться только с trusted repositories.

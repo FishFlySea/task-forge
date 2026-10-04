@@ -37,7 +37,12 @@ Review (Ollama)
 Completed / NeedsUser / Failed / BudgetExceeded
 ~~~
 
-TaskForge launches Codex with the multi-agent feature explicitly disabled.
+TaskForge launches Codex with an explicit command-line policy rather than relying on
+user defaults: multi-agent is disabled, the sandbox is `workspace-write`, approval
+policy is `never` for unattended execution, sandboxed shell network access is
+disabled, and the built-in web-search tool is disabled. User-level MCP servers are a
+separate configuration surface and are not yet isolated by TaskForge.
+
 Codex execution uses one shared budget model for max runs, concurrency, timeout and
 per-kind rollout/token limits. There is no separate retry counter: the default
 `MaxCodexRuns=2` means one Implementation plus at most one Correction. JSONL usage
@@ -67,8 +72,9 @@ After every Codex coding run, TaskForge snapshots changed files before build/tes
 rejects out-of-scope writes as `NeedsUser`; policy violations never receive an
 automatic corrective Codex run.
 
-The architecture review still has additional hardening gaps: explicit network/approval
-policy, prompt/model/tool manifests and a common host sandbox boundary for build/test.
+The architecture review still has additional hardening gaps: isolation from user-level
+Codex MCP/config surfaces, prompt/model/tool manifests, an environment allowlist, and
+a common host sandbox boundary for build/test.
 
 **Until ADR-0002 is fully implemented, run TaskForge only against repositories
 you trust.** A git worktree alone will not be treated as a host security boundary.
