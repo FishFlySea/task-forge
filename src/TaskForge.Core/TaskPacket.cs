@@ -14,6 +14,10 @@ public sealed record TaskPacket
 
     public required IReadOnlyList<string> RelevantFiles { get; init; }
 
+    public IReadOnlyList<ContextSpan> ContextSpans { get; init; } = [];
+
+    public TaskPacketBudget? Budget { get; init; }
+
     public required IReadOnlyList<string> Observations { get; init; }
 
     public IReadOnlyList<string> WriteScope { get; init; } = [];

@@ -257,6 +257,23 @@ internal static class Program
             new CodexRunGate(
                 codexBudget);
 
+        var taskPacketOptions =
+            new TaskPacketOptions
+            {
+                MaxContextCharacters =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_MAX_CONTEXT_CHARS",
+                        32_000),
+                MaxSpanCharacters =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_MAX_SPAN_CHARS",
+                        8_000),
+                ApproximateCharactersPerToken =
+                    GetPositiveIntEnvironmentVariable(
+                        "TASKFORGE_PACKET_APPROX_CHARS_PER_TOKEN",
+                        4)
+            };
+
         var orchestrator =
             new TaskOrchestrator(
                 runStore,
@@ -265,6 +282,8 @@ internal static class Program
                 new ExplorerAgent(
                     localLlm,
                     new FileSystemRepositorySearch()),
+                new FileSystemContextCollector(
+                    taskPacketOptions),
                 new ImplementerAgent(
                     new CodexCliClient(
                         codexOptions,

@@ -54,6 +54,12 @@ public sealed class RunInspector(
         var canApply =
             !string.IsNullOrWhiteSpace(
                 taskPacket?.BaseCommit)
+            && taskPacket.SchemaVersion >= 2
+            && taskPacket.Budget is not null
+            && taskPacket.Budget.UsedContextCharacters
+               <= taskPacket.Budget.MaxContextCharacters
+            && (taskPacket.RelevantFiles.Count == 0
+                || taskPacket.ContextSpans.Count > 0)
             && taskPacket.WriteScope.Count > 0
             && metadata.State
                 is WorkflowState.ReadyToApply
@@ -122,6 +128,31 @@ public sealed class RunInspector(
             {
                 warnings.Add(
                     "TaskPacket has an empty write scope and cannot be safely applied.");
+            }
+
+            if (taskPacket.SchemaVersion < 2)
+            {
+                warnings.Add(
+                    $"TaskPacket schema v{taskPacket.SchemaVersion} does not contain bounded context.");
+            }
+
+            if (taskPacket.Budget is null)
+            {
+                warnings.Add(
+                    "TaskPacket has no context budget.");
+            }
+            else if (taskPacket.Budget.UsedContextCharacters
+                     > taskPacket.Budget.MaxContextCharacters)
+            {
+                warnings.Add(
+                    "TaskPacket context exceeds its configured budget.");
+            }
+
+            if (taskPacket.RelevantFiles.Count > 0
+                && taskPacket.ContextSpans.Count == 0)
+            {
+                warnings.Add(
+                    "TaskPacket has relevant files but no prepared context spans.");
             }
         }
 
