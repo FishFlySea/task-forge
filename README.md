@@ -6,10 +6,13 @@ Architecture:
 
 - [ADR-0001 — Controlled AI-worker orchestration](docs/adr/0001-controlled-multi-agent-architecture.md)
 - [ADR-0002 — Workspace isolation and sandbox](docs/adr/0002-workspace-isolation-and-sandbox.md)
+- [ADR-0003 — CLI role profiles for Codex and Claude Code (proposed)](docs/adr/0003-cli-role-profiles-and-multi-provider-workers.md)
 - [Orchestrator design](docs/design/orchestrator.md)
 - [RFC-0001 — historical MVP proposal](docs/rfc/0001-mvp-implementation.md)
 
 ## Current status
+
+**Proposed next architecture (not yet implemented):** configure separate role profiles for Architect, Explorer, Developer, Diagnostic and Reviewer, each bound to an installed/authenticated Codex CLI or Claude Code CLI and its own model, instructions and budget. ADR-0003 defines compatibility and security requirements; the workflow below is the **current Codex/Ollama MVP**, not an implemented multi-CLI feature.
 
 The first end-to-end execution workflow is implemented:
 
