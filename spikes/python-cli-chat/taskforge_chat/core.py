@@ -18,7 +18,7 @@ import tempfile
 from typing import Any, Callable
 from uuid import uuid4
 
-MAX_EVENTS_BYTES = 4_000_000
+MAX_EVENTS_BYTES = 16_000_000
 MAX_PROMPT_CHARS = 32_000
 MAX_TURN_SECONDS = 600
 MAX_REPLY_CHARS = 200_000
@@ -287,14 +287,15 @@ async def run_turn(session: ChatSession, prompt: str, on_tool: Callable[[str], N
         process.stdin.write(prompt.encode("utf-8"))
         await process.stdin.drain()
         process.stdin.close()
+        # CLI JSONL lines may contain entire tool results (e.g. Claude Read),
+        # which routinely exceed asyncio StreamReader's 64 KiB readline limit.
+        # Read bounded chunks and split JSONL ourselves instead of readline().
         total_bytes = 0
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-            total_bytes += len(line)
-            if total_bytes > MAX_EVENTS_BYTES:
-                raise ChatError("CLI event output exceeded the spike limit")
+        pending = bytearray()
+
+        def handle_line(line: bytes) -> None:
+            if not line.strip():
+                return
             try:
                 event = json.loads(line)
             except (ValueError, UnicodeDecodeError) as exc:
@@ -302,6 +303,18 @@ async def run_turn(session: ChatSession, prompt: str, on_tool: Callable[[str], N
             if not isinstance(event, dict):
                 raise ChatError("CLI event must be an object")
             parser.feed(event)
+
+        while chunk := await process.stdout.read(64 * 1024):
+            total_bytes += len(chunk)
+            if total_bytes > MAX_EVENTS_BYTES:
+                raise ChatError(f"CLI event output exceeded the {MAX_EVENTS_BYTES}-byte turn limit")
+            pending.extend(chunk)
+            while (newline := pending.find(b"\n")) != -1:
+                handle_line(bytes(pending[:newline]))
+                del pending[:newline + 1]
+        # A valid final JSONL event need not end with a newline.
+        if pending:
+            handle_line(bytes(pending))
         code = await process.wait()
         if code != 0:
             err = (await stderr_task).decode(errors="replace")
