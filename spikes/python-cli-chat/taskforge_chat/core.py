@@ -161,8 +161,13 @@ class EventParser:
             elif etype == "turn.completed":
                 self.usage = event.get("usage")
             elif etype in ("turn.failed", "error"):
-                err = event.get("error") or event
-                self._failed = str(err)[:250]
+                # Codex can report failures exclusively via JSONL stdout. An
+                # unsuccessful process often has completely empty stderr.
+                err = event.get("error") or event.get("message") or event.get("detail")
+                if isinstance(err, dict):
+                    message = err.get("message") or err.get("detail") or err.get("code")
+                    err = message or json.dumps(err, ensure_ascii=False)
+                self._failed = str(err or "Codex reported a failed turn")[:800]
         elif self.backend == "claude":
             if etype == "system" and event.get("subtype") == "init":
                 self.session_id = event.get("session_id")
@@ -317,8 +322,14 @@ async def run_turn(session: ChatSession, prompt: str, on_tool: Callable[[str], N
             handle_line(bytes(pending))
         code = await process.wait()
         if code != 0:
-            err = (await stderr_task).decode(errors="replace")
-            raise ChatError(f"{session.backend} exited with {code}: {err[:400]}")
+            stderr = (await stderr_task).decode(errors="replace").strip()
+            # Do not discard structured errors parsed from stdout when stderr
+            # is empty; merge the two only if they provide distinct details.
+            details = [part for part in (parser._failed, stderr[:800]) if part]
+            if not details:
+                details = ["CLI returned no diagnostic message; inspect its JSONL stdout "
+                           "and check the selected model, login and local CLI config"]
+            raise ChatError(f"{session.backend} exited with {code}: {' | '.join(dict.fromkeys(details))}")
         return parser.finish()
     try:
         return await asyncio.wait_for(collect(), timeout)
