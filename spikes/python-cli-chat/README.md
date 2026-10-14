@@ -50,6 +50,14 @@ conversation. `/use <id>` opens a saved TaskForge chat. Old sessions remain inta
 assistant final replies**, but not raw tool output/trace. Each reply is produced
 by a separate process that resumes the vendor's session ID.
 
+## Large CLI events
+
+Claude Code can emit one JSONL event containing a full `Read` tool result.
+The event may be much larger than Python's default 64 KiB stream line limit.
+The reader consumes bounded chunks and reconstructs JSONL events; the current
+per-turn stdout cap is 16 MB. Exceeding the cap now reports a `ChatError`
+without persisting a failed turn, rather than crashing the terminal session.
+
 ## Scope, known limitations
 
 - Native tools are deliberately **read-only**: Codex uses `read-only` sandbox;
