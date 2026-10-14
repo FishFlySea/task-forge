@@ -4,6 +4,9 @@
 - **Дата:** 2026-10-01
 - **Пересмотр:** 2026-10-02
 - **Проект:** TaskForge
+- **Дополнение (2026-10-14):** [ADR-0003 — роли и профили для Codex/Claude CLI](0003-cli-role-profiles-and-multi-provider-workers.md)
+
+> **Уточнение архитектуры (ADR-0003):** перечисленные далее Codex-only и local-Ollama назначения описывают исторический MVP, но больше не ограничивают целевую архитектуру. Роли могут выполняться установленными Codex CLI или Claude Code CLI с независимо выбранными моделями. Инварианты TaskForge-owned orchestration, workspace isolation, authoritative build/test и ограниченных запусков сохраняются; лимит `MaxCodexRuns` обобщается до `MaxCodingRunsPerTask`. При конфликте provider/role routing руководствоваться ADR-0003.
 
 ## Контекст
 
@@ -265,6 +268,7 @@ TaskForge должен собирать как минимум:
 ## Связанные документы
 
 - [ADR-0002: Workspace isolation и sandbox](0002-workspace-isolation-and-sandbox.md)
+- [ADR-0003: Role profiles for Codex CLI and Claude Code CLI](0003-cli-role-profiles-and-multi-provider-workers.md)
 - [Orchestrator design](../design/orchestrator.md)
 - [RFC-0001](../rfc/0001-mvp-implementation.md) — historical/superseded implementation proposal.
 
