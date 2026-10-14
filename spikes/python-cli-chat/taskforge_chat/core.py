@@ -205,7 +205,7 @@ def build_command(backend: str, model: str, vendor_session_id: str | None,
         raise ChatError("Invalid provider session id")
     if backend == "codex":
         argv = [exe, "exec", "--json", "--model", model,
-                "--sandbox", "read-only", "--ask-for-approval", "never",
+                "--sandbox", "read-only", "-c", "approval_policy=never",
                 "-c", "features.multi_agent=false", "-c", "web_search=disabled",
                 "-c", "sandbox_workspace_write.network_access=false"]
         if vendor_session_id:
