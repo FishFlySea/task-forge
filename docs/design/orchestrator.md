@@ -6,7 +6,7 @@
 
 Этот документ описывает изменяемый implementation design. Архитектурные инварианты находятся в ADR и не должны дублироваться здесь как отдельные решения.
 
-> **Планируемое расширение (ещё не реализовано):** ADR-0003 вводит привязку ролей к установленным Codex/Claude CLI и независимым моделям, ADR-0004 предлагает Python-first core и механизм controlled self-extension. Далее описан действующий .NET 10 / Ollama + Codex MVP и его implementation backlog; примеры C# являются историческими/логическими контрактами, а не запретом на Python.
+> **Планируемое расширение (ещё не реализовано):** ADR-0003 вводит привязку ролей к установленным Codex/Claude CLI и независимым моделям, ADR-0004 принимает Python-first как целевое направление после проверки migration gates, а ADR-0005 задаёт bounded post-session Reflection/Curator, memory/skills proposals и approval. Далее описан действующий .NET 10 / Ollama + Codex MVP и его implementation backlog; примеры C# являются историческими/логическими контрактами, а не запретом на Python.
 
 ## 1. Goals
 
