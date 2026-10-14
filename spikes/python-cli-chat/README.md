@@ -58,6 +58,25 @@ The reader consumes bounded chunks and reconstructs JSONL events; the current
 per-turn stdout cap is 16 MB. Exceeding the cap now reports a `ChatError`
 without persisting a failed turn, rather than crashing the terminal session.
 
+## Diagnosing Codex failures
+
+Codex may report errors as JSONL events in stdout while leaving stderr empty.
+TaskForge now displays the parsed `turn.failed` / `error` message even when
+`codex exec` exits with a nonzero code. If it reports no diagnostic at all,
+verify model availability, authentication and local CLI configuration directly.
+
+Example using the **same** read-only policy (from a trusted repo):
+
+```bash
+printf 'Reply with OK\n' | codex exec --json --model 'gpt6-luna' \
+  --sandbox read-only -c approval_policy=never \
+  -c features.multi_agent=false -c web_search=disabled -
+```
+
+Inspect JSON events with `jq`, but do not post entire raw logs publicly: they
+may contain private project context or tool results. A model name here is only
+an example, not a guarantee that the authenticated account supports it.
+
 ## Scope, known limitations
 
 - Native tools are deliberately **read-only**: Codex uses `read-only` sandbox;
