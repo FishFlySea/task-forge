@@ -18,8 +18,11 @@ import json, os, sys, time
 from pathlib import Path
 args = sys.argv[1:]
 if '--version' in args:
-    print('2.1.300 (Claude Code)' if os.environ.get('TF_BACKEND') == 'claude' else 'codex-cli 1.1.0')
+    print('2.1.300 (Claude Code)' if os.environ.get('TF_BACKEND') == 'claude' else 'codex-cli 0.160.0')
     sys.exit(0)
+if os.environ.get('TF_BACKEND') == 'codex' and '--ask-for-approval' in args:
+    print("error: unexpected argument '--ask-for-approval' found", file=sys.stderr)
+    sys.exit(2)
 text = sys.stdin.read()
 Path(os.environ['TF_FAKE_LOG']).open('a', encoding='utf8').write(json.dumps({{'args': args, 'prompt': text}})+'\\n')
 if text == 'sleep':
@@ -85,6 +88,13 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('resume', invocations[1]['args'])
         self.assertIn(sess.provider_session_id, invocations[1]['args'])
         self.assertIn('read-only', invocations[0]['args'])
+        for invocation in invocations:
+            args = invocation['args']
+            self.assertNotIn('--ask-for-approval', args)
+            self.assertNotIn('--dangerously-bypass-approvals-and-sandbox', args)
+            self.assertIn('approval_policy=never', args)
+            self.assertEqual(args[args.index('--sandbox') + 1], 'read-only')
+            self.assertIn('features.multi_agent=false', args)
         self.assertNotIn('--ephemeral', invocations[0]['args'])
         self.assertEqual(len(self.store.load(sess.id).turns), 2)
         self.assertEqual(stat.S_IMODE(self.store._path(sess.id).stat().st_mode), 0o600)
@@ -140,6 +150,15 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.list()[0].id, s.id)
         self.assertNotIn('resume', build_command('codex', 'm', None))
         self.assertIn('resume', build_command('codex', 'm', '12345678'))
+
+    def test_codex_0160_exec_approval_policy_for_fresh_and_resumed_sessions(self):
+        for session_id in (None, '12345678-aaaa-bbbb-cccc-123456789012'):
+            cmd = build_command('codex', 'gpt6-luna', session_id)
+            self.assertEqual(cmd[:2], ['codex', 'exec'])
+            self.assertNotIn('--ask-for-approval', cmd)
+            self.assertIn('approval_policy=never', cmd)
+            self.assertEqual(cmd[cmd.index('--sandbox') + 1], 'read-only')
+            self.assertIn('resume', cmd) if session_id else self.assertNotIn('resume', cmd)
 
     async def test_rejected_old_claude_cli(self):
         os.environ['TF_BACKEND'] = 'claude'
