@@ -5,6 +5,7 @@
 - **Проект:** TaskForge
 - **Расширяет:** [ADR-0001](0001-controlled-multi-agent-architecture.md)
 - **Сохраняет ограничения безопасности:** [ADR-0002](0002-workspace-isolation-and-sandbox.md)
+- **Вариант языка и расширяемости:** [ADR-0004](0004-python-core-and-controlled-self-extension.md) — Proposed
 
 ## Контекст
 
