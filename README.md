@@ -9,6 +9,21 @@ Architecture:
 - [Orchestrator design](docs/design/orchestrator.md)
 - [RFC-0001 — historical MVP proposal](docs/rfc/0001-mvp-implementation.md)
 
+## Experimental Python chat (separate branch)
+
+The Python terminal chat prototype lives in [spikes/python-cli-chat](spikes/python-cli-chat/README.md).
+It launches an **installed and authenticated** Codex CLI or Claude Code CLI, with an explicitly selected model, read-only native tools and resumable sessions. This is a spike, not the .NET orchestrator replacement; it does not provide a full host sandbox.
+
+Quickstart on Linux from the repository root:
+
+```bash
+cd spikes/python-cli-chat
+python3 -m unittest discover -s tests -v
+python3 -m taskforge_chat --repo /path/to/trusted/repo
+```
+
+See the spike README for model/backend flags, limitations, and session commands.
+
 ## Current status
 
 The first end-to-end execution workflow is implemented:
