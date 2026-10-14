@@ -110,6 +110,8 @@ public interface IAgentCliBackend
 
 Для read-only ролей агенту передаётся подготовленный TaskPacket/diff/logs; shell, edit и дополнительные агенты недоступны согласно **проверенной** политике запуска. Только implementation/correction могут получить write capability и только в disposable worktree. Контроль `writeScope` и authoritative build/test остаётся в TaskForge.
 
+Показанный C# интерфейс описывает **логические границы**, а не выбор языка для новой реализации. Если будет принят ADR-0004, те же контракты реализуются Python `Protocol`/typed DTO и versioned IPC.
+
 Этот интерфейс — граница CLI-рантайма, а не публичный generic `ILlmProvider`. Отдельный `IChatClient` может остаться для прямой Ollama как optional Tier-1 backend; его наличие не является условием для ролей на Codex/Claude.
 
 ### 4. Запуск установленных приложений
@@ -117,7 +119,7 @@ public interface IAgentCliBackend
 TaskForge использует `codex` и `claude` из PATH либо явные пути из конфигурации, без встроенных SDK и без собственной авторизации от имени пользователя. Первоначальные установка и login — ответственность оператора; `taskforge doctor` должен проверять binary, version, auth и необходимые capabilities **до** расходного запуска. Credentials не включаются в TaskPacket, prompts и logs.
 
 - **Codex adapter:** `codex exec`, явные `--model`, `--json`, workspace/sandbox/approval/config overrides; structured JSON output при поддержке CLI. Для read-only запуска — `read-only` sandbox, для coding — `workspace-write`; не полагаться на user config по умолчанию.
-- **Claude Code adapter:** `claude -p`, явные `--model`, `--output-format stream-json`, `--max-turns`, режим разрешений и ограничения `--tools` / MCP; structured JSON output при поддержке CLI. Для read-only стадии предпочтителен `--restricted` в версии, где он поддержан. `--permission-prompts none` помогает избежать зависания при unattended режиме (требуется проверка версии).
+- **Claude Code adapter:** `claude -p`, явные `--model`, `--output-format stream-json`, `--max-turns`, режим разрешений и ограничения `--tools` / MCP; structured JSON output при поддержке CLI. Для read-only стадии использовать проверяемое ограничение доступных tools (например, `--tools Read` вместе с `--permission-mode plan`, если версия и фактическое поведение соответствуют policy), а `--permission-prompts none` (в версиях, где он поддерживается) запрещает интерактивное подтверждение. `--bare` снижает загрузку сторонних расширений, но **сам по себе не отключает** Bash/Edit; соответствующие capabilities нужно ограничить явно. Версионный capability probe обязателен.
 - Prompt передаётся через stdin или временный защищённый файл, если CLI это поддерживает; аргументы формируются типизированным builder без shell string interpolation. Отдельный процесс получает scoped environment, managed cwd, stdout/stderr streams, отмену и process-tree kill.
 - TaskForge управляет собственным worktree; встроенные `--worktree` CLI в этом workflow не включаются, чтобы избежать двойного управления lifecycle.
 - CLI session/resume является только оптимизацией внутри допустимого run; нельзя через resume обойти лимит вызовов, изменить профиль, расширить scope или продолжить устаревший TaskPacket.
