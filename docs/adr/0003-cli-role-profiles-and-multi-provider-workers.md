@@ -5,7 +5,8 @@
 - **Проект:** TaskForge
 - **Расширяет:** [ADR-0001](0001-controlled-multi-agent-architecture.md)
 - **Сохраняет ограничения безопасности:** [ADR-0002](0002-workspace-isolation-and-sandbox.md)
-- **Вариант языка и расширяемости:** [ADR-0004](0004-python-core-and-controlled-self-extension.md) — Proposed
+- **Язык и расширяемость:** [ADR-0004](0004-python-core-and-controlled-self-extension.md) — Python-first accepted direction
+- **Саморефлексия:** [ADR-0005](0005-conversation-reflection-memory-and-skill-evolution.md)
 
 ## Контекст
 
@@ -18,10 +19,12 @@
 ### 1. Роль, профиль и CLI-backend — разные сущности
 
 - **Workflow stage** — канонический этап (`planning`, `exploration`, `implementation`, `diagnosis`, `correction`, `review`). Переходами управляет только TaskForge.
-- **Role** — назначение для этапа: `architect`, `explorer`, `developer`, `diagnostician`, `reviewer`. Можно определять дополнительные именованные роли и назначать их поддерживаемым этапам.
+- **Role** — назначение для этапа: `architect`, `explorer`, `developer`, `diagnostician`, `reviewer`, `reflector`, `curator`. Можно определять дополнительные именованные роли и назначать их поддерживаемым этапам.
 - **Agent profile** — конфигурация конкретного исполнителя: `backend`, `model`, optional `effort`, шаблон/версия инструкций, capabilities, policy, ограничения ресурсов.
 - **CLI backend** — адаптер `codex-cli` или `claude-code-cli`, который запускает локальный executable как дочерний процесс и приводит события/результат к единому формату.
 - **Binding** — явное соответствие stage/role -> именованный profile. Один backend может использоваться несколькими ролями с разными моделями, инструкциями и бюджетами.
+
+Reflection/curation stages добавляются по ADR-0005 как отдельно ограниченные, read-only и учитываемые в бюджете invocations роли. Reflection не может менять role bindings и skills напрямую; только staging.
 
 Нельзя смешивать роль (`reviewer`) с провайдером (`claude-code-cli`) и моделью (`opus`). Routing выполняется по сохранённому binding, а не по self-confidence модели и не по просьбам агента.
 
