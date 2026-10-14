@@ -7,6 +7,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 from taskforge_chat.core import (ChatError, EventParser, SessionStore, ask,
                                  build_command, doctor, run_turn)
@@ -33,6 +34,9 @@ if backend == 'codex':
     print(json.dumps({{'type':'turn.completed','usage':{{'input_tokens':12,'output_tokens':4}}}}), flush=True)
 else:
     print(json.dumps({{'type':'system','subtype':'init','session_id':'12345678-aaaa-bbbb-cccc-123456789012'}}), flush=True)
+    if text == 'large':
+        # One Claude tool result event over 64 KiB; previously readline() crashed.
+        print(json.dumps({{'type':'user','message':{{'content':[{{'type':'tool_result','tool_use_id':'t2','content':'x' * 200_000}}]}}}}), flush=True)
     print(json.dumps({{'type':'assistant','message':{{'content':[{{'type':'tool_use','id':'t2','name':'Read','input':{{'file_path':'README.md'}}}}]}}}}), flush=True)
     print(json.dumps({{'type':'assistant','message':{{'content':[{{'type':'tool_use','id':'t2','name':'Read'}}]}}}}), flush=True)
     print(json.dumps({{'type':'result','session_id':'12345678-aaaa-bbbb-cccc-123456789012','result':'I read the README.','usage':{{'input_tokens':25}}}}), flush=True)
@@ -100,6 +104,24 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('Read,Glob,Grep', invocations[0]['args'])
         self.assertIn('--resume', invocations[1]['args'])
         self.assertIn(sess.provider_session_id, invocations[1]['args'])
+
+    async def test_claude_jsonl_single_event_larger_than_stream_default(self):
+        os.environ['TF_BACKEND'] = 'claude'
+        sess = self.store.create('claude', 'sonnet', self.repo)
+        observed = []
+        result = await ask(sess, self.store, 'large', observed.append, executable=str(self.fake))
+        self.assertEqual(result.answer, 'I read the README.')
+        self.assertEqual(observed, ['Read'])
+        self.assertEqual(len(self.store.load(sess.id).turns), 1)
+
+    async def test_large_jsonl_aggregate_fails_cleanly_without_persisting(self):
+        os.environ['TF_BACKEND'] = 'claude'
+        sess = self.store.create('claude', 'sonnet', self.repo)
+        with patch('taskforge_chat.core.MAX_EVENTS_BYTES', 100_000):
+            with self.assertRaisesRegex(ChatError, 'CLI event output exceeded'):
+                await ask(sess, self.store, 'large', lambda _: None, executable=str(self.fake))
+        self.assertEqual(self.store.load(sess.id).turns, [])
+        self.assertIsNone(self.store.load(sess.id).provider_session_id)
 
     async def test_timeouts_do_not_persist_failed_turn(self):
         os.environ['TF_BACKEND'] = 'codex'
