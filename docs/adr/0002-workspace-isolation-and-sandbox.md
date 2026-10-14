@@ -3,7 +3,9 @@
 - **Статус:** Accepted
 - **Дата:** 2026-10-02
 - **Проект:** TaskForge
-- **Связано:** [ADR-0001](0001-controlled-multi-agent-architecture.md)
+- **Связано:** [ADR-0001](0001-controlled-multi-agent-architecture.md), [ADR-0003](0003-cli-role-profiles-and-multi-provider-workers.md)
+
+> **Область действия с 2026-10-14:** правила workspace, command policy, credentials, network/tool boundary и build/test применяются к **любому** CLI-worker, включая Codex и Claude Code. Флаги Codex далее отражают историческую реализацию. CLI-специфичные способы enforcement и role capabilities определяются ADR-0003; unsupported protections — fail closed, а не «заменяются» промптом.
 
 ## Контекст
 
@@ -58,7 +60,7 @@ Post-run validation обязательна даже при наличии OS san
 
 Для CLI-based worker `writeScope` не считается полноценной filesystem security boundary, если backend не умеет enforce path-level writes. Это acceptance policy: diff вне scope не принимается.
 
-### 3. Codex запускается с hard launch policy
+### 3. Coding CLI запускаются с hard launch policy
 
 Launcher должен задавать policy явно, не полагаясь на пользовательский config:
 
@@ -72,7 +74,9 @@ Launcher должен задавать policy явно, не полагаясь 
 
 Prompt `Do not spawn subagents` остаётся defence-in-depth, но не enforcement.
 
-Конкретные CLI flags являются implementation detail и могут меняться вместе с Codex CLI. TaskForge должен иметь integration tests, проверяющие эффективную launch policy для поддерживаемой версии CLI.
+Codex и Claude Code используют разные sandbox/permission/tool mechanisms, которые нельзя считать эквивалентными. Для read-only ролей необходима реально проверяемая политика без edit/shell/tool escalation; для write роли — sandbox/worktree/write-scope. Сетевой доступ CLI к поставщику модели отделяется от командного сетевого доступа агента.
+
+Конкретные CLI flags являются implementation detail и могут меняться вместе с версиями CLI. TaskForge должен иметь integration tests, проверяющие эффективную launch policy для поддерживаемой версии CLI.
 
 ### 4. Build/test исполняются в том же trust boundary
 
@@ -199,6 +203,8 @@ TaskForge прекращает автоматический workflow. Допол
 - untrusted repositories нельзя считать безопасными до завершения process sandbox.
 
 ## Implementation status
+
+Ниже исторический статус **Codex-only MVP**. Claude Code CLI, role bindings и generalized budgets описаны в ADR-0003 и пока не реализованы.
 
 На 2026-10-03 реализованы:
 
