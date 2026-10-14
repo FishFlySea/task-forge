@@ -1,9 +1,9 @@
 # ADR-0004: Python-first ядро и контролируемое саморазвитие TaskForge
 
-- **Статус:** Proposed — требует решения до переписывания MVP
+- **Статус:** Accepted as target direction (2026-10-14); migration gated by spike and parity
 - **Дата:** 2026-10-14
 - **Проект:** TaskForge
-- **Связано:** [ADR-0001](0001-controlled-multi-agent-architecture.md), [ADR-0002](0002-workspace-isolation-and-sandbox.md), [ADR-0003](0003-cli-role-profiles-and-multi-provider-workers.md)
+- **Связано:** [ADR-0001](0001-controlled-multi-agent-architecture.md), [ADR-0002](0002-workspace-isolation-and-sandbox.md), [ADR-0003](0003-cli-role-profiles-and-multi-provider-workers.md), [ADR-0005](0005-conversation-reflection-memory-and-skill-evolution.md)
 
 ## Контекст
 
@@ -28,6 +28,8 @@ Core содержит стабильную deterministic control plane: state ma
 3. **Core evolution:** изменение engine, policies, схем, CLI adapters и workflow само по себе **не** hot-loaded plugin. Агент создаёт branch/PR, запускает проверки, получает независимое review и человеческое approval перед merge/deploy.
 
 Нельзя превращать произвольный Python-скрипт из каталога `skills/` в автоматически доверенный инструмент.
+
+**Непрерывное обучение на опыте:** разбор сессий, reflection, memory/skill proposals, version pinning, corrections, approval и rollback — самостоятельный контур по [ADR-0005](0005-conversation-reflection-memory-and-skill-evolution.md). Он не имеет права обходить ограничения на создание исполняемых плагинов и изменение ядра.
 
 ### 3. Контракты и registry
 
@@ -95,13 +97,13 @@ Need a capability
 
 ### 6. Не переписывать весь MVP одним шагом
 
-До принятия ADR-0004 .NET 10 `main` остаётся рабочей веткой/источником истины. Предлагаемый переход:
+До выполнения migration acceptance gates .NET 10 `main` остаётся рабочей реализацией/источником истины, хотя **Python-first принят как целевое направление**. Этапы перехода:
 
 1. **Python spike:** запустить обе установленные CLI из Python, проверить non-interactive outputs, model selection, cancellation, auth probing, базовый role binding и isolated workspace; test doubles обязательны.
-2. **Plugin vertical slice:** агент по инструкции создаёт один простой skill и один Python tool plugin; статическая проверка, isolated execution, ручное одобрение, активация и rollback доказаны end-to-end.
+2. **Plugin + learning vertical slice:** Reflection Agent анализирует разрешённый завершённый чат с подтверждённой пользовательской коррекцией и создаёт staged предложение skill-create/patch; отдельный Curator/approval manager проверяет его по ADR-0005. Также агент создаёт один изолированный Python tool plugin; для него проверяются sandbox, ручное одобрение, активация и rollback end-to-end.
 3. **Core parity:** перенести state machine, TaskPacket, budgets, deterministic build/test, git worktree, inspect, JSONL usage и artifacts. Сохранять чтение существующих TaskPacket v3, явно version/migrate новые.
 4. **Acceptance:** сравнить Python с текущим .NET по реальному E2E, семантике ошибок, безопасности, времени/расходу CLI и восстановлению после сбоев.
-5. Только после принятия evidence перевести Python в основную реализацию. До этого .NET не удалять, не переписывать `main` массовым PR.
+5. Только после прохождения acceptance gates перевести Python в основную реализацию. До этого .NET не удалять, не переписывать `main` массовым PR.
 
 ### 7. Критерии принятия перехода на Python
 
