@@ -29,6 +29,12 @@ if text == 'sleep':
     time.sleep(4)
     sys.exit(0)
 backend = os.environ.get('TF_BACKEND', 'codex')
+if backend == 'codex' and text in ('fail-json', 'fail-empty', 'fail-stderr'):
+    if text == 'fail-json':
+        print(json.dumps({{'type': 'turn.failed', 'error': {{'message': 'Model gpt6-luna is not available', 'code': 'model_not_found'}}}}), flush=True)
+    if text == 'fail-stderr':
+        print('provider rejected the request', file=sys.stderr, flush=True)
+    sys.exit(1)
 if backend == 'codex':
     print(json.dumps({{'type': 'thread.started', 'thread_id': '12345678-aaaa-bbbb-cccc-123456789012'}}), flush=True)
     print(json.dumps({{'type':'item.started','item':{{'id':'t1','type':'command_execution','command':'pwd','status':'in_progress'}}}}), flush=True)
@@ -132,6 +138,28 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
                 await ask(sess, self.store, 'large', lambda _: None, executable=str(self.fake))
         self.assertEqual(self.store.load(sess.id).turns, [])
         self.assertIsNone(self.store.load(sess.id).provider_session_id)
+
+    async def test_codex_jsonl_error_is_displayed_on_exit_one(self):
+        os.environ['TF_BACKEND'] = 'codex'
+        sess = self.store.create('codex', 'gpt6-luna', self.repo)
+        with self.assertRaisesRegex(ChatError, 'Model gpt6-luna is not available'):
+            await ask(sess, self.store, 'fail-json', lambda _: None, executable=str(self.fake))
+        self.assertEqual(self.store.load(sess.id).turns, [])
+        self.assertIsNone(self.store.load(sess.id).provider_session_id)
+
+    async def test_codex_exit_one_without_any_diagnostic_is_explained(self):
+        os.environ['TF_BACKEND'] = 'codex'
+        sess = self.store.create('codex', 'gpt6-luna', self.repo)
+        with self.assertRaisesRegex(ChatError, 'CLI returned no diagnostic message'):
+            await ask(sess, self.store, 'fail-empty', lambda _: None, executable=str(self.fake))
+        self.assertEqual(self.store.load(sess.id).turns, [])
+
+    async def test_codex_stderr_is_preserved_on_failure(self):
+        os.environ['TF_BACKEND'] = 'codex'
+        sess = self.store.create('codex', 'gpt6-luna', self.repo)
+        with self.assertRaisesRegex(ChatError, 'provider rejected the request'):
+            await ask(sess, self.store, 'fail-stderr', lambda _: None, executable=str(self.fake))
+        self.assertEqual(self.store.load(sess.id).turns, [])
 
     async def test_timeouts_do_not_persist_failed_turn(self):
         os.environ['TF_BACKEND'] = 'codex'
